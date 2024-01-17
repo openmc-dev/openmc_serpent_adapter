@@ -40,4 +40,4 @@ Discussions = "https://openmc.discourse.org"
 "Source Code" = "https://github.com/openmc-dev/openmc_serpent_adapter"
 
 [project.scripts]
-serpent_to_openmc = "openmc_serpent_adapter.serpent_conversion:serpent_to_openmc"
+serpent_to_openmc = "openmc_serpent_adapter.serpent_conversion:main"
