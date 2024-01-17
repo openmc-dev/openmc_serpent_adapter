@@ -10,9 +10,10 @@ from openmc.model.surface_composite import CompositeSurface
 from openmc.data import get_thermal_name
 from openmc.data.ace import get_metadata
 
-#---------------------------------------------------------------------
-# Defining the rectangular prism as a composite surface
+
 class RectangularPrism(CompositeSurface):
+    """Rectangular prism as a composite surface"""
+
     _surface_names = ('xmin', 'xmax', 'ymin', 'ymax')
 
     def __init__(self, xmin, xmax, ymin, ymax, **kwargs):
@@ -27,14 +28,19 @@ class RectangularPrism(CompositeSurface):
 
     def __neg__(self):
         return -self.xmax & +self.xmin & -self.ymax & +self.ymin
+
     def __pos__(self):
         return +self.xmax | -self.xmin | +self.ymax | -self.ymin
+
+
 def sqc(x0, y0, d, **kwargs):
+    """Infinite square prism parallel to z-axis"""
     return RectangularPrism(x0 - d, x0 + d, y0 - d, y0 + d, **kwargs)
 
-#---------------------------------------------------------------------
-# Defining the y-type hexagonal prism as a composite surface
+
 class Y_typeHexagonalPrism(CompositeSurface):
+    """Y-type hexagonal prism as a composite surface"""
+
     _surface_names = ('right', 'left', 'upper_right', 'upper_left', 'lower_right', 'lower_left')
 
     def __init__(self, right, left, upper_right, upper_left, lower_right, lower_left, **kwargs):
@@ -55,19 +61,24 @@ class Y_typeHexagonalPrism(CompositeSurface):
             self.upper_left.periodic_surface = self.lower_right
         for name in self._surface_names:
             getattr(self, name).boundary_type = boundary_type
+
     def __neg__(self):
         return -self.right & +self.left & -self.upper_right & -self.upper_left & +self.lower_right & +self.lower_left
+
     def __pos__(self):
         return +self.right | -self.left | +self.upper_right | +self.upper_left | -self.lower_right | -self.lower_left
 
+
 def hexyc(x0, y0, d, **kwargs):
+    """Infinite hexagonal prism parallel to z-axis, flat surface perpendicular to y-axis"""
     c = sqrt(3.)/3
     l = d / (sqrt(3.)/2)
     return Y_typeHexagonalPrism(x0 + d, x0 - d, l+x0*c+y0, l-x0*c+y0, -l-x0*c+y0, -l+x0*c+y0, **kwargs)
 
-#---------------------------------------------------------------------
-# Defining the x-type hexagonal prism as a composite surface
+
 class X_typeHexagonalPrism(CompositeSurface):
+    """X-type hexagonal prism as a composite surface"""
+
     _surface_names = ('top', 'bottom', 'upper_right', 'upper_left', 'lower_right', 'lower_left')
 
     def __init__(self, top, bottom, upper_right, upper_left, lower_right, lower_left, **kwargs):
@@ -91,9 +102,13 @@ class X_typeHexagonalPrism(CompositeSurface):
 
     def __neg__(self):
         return -self.top & +self.bottom & -self.upper_right & -self.upper_left & +self.lower_right & +self.lower_left
+
     def __pos__(self):
         return +self.top | -self.bottom | +self.upper_right | +self.upper_left | -self.lower_right | -self.lower_left
-def hexyc(x0, y0, d, **kwargs):
+
+
+def hexxc(x0, y0, d, **kwargs):
+    """Infinite hexagonal prism parallel to z-axis, flat surface perpendicular to x-axis"""
     c = sqrt(3.)/3
     l = d / (sqrt(3.)/2)
     return X_typeHexagonalPrism(x0 + d, x0 - d, c*l+x0*c+y0, c*l-x0*c+y0, -c*l-x0*c+y0, -c*l+x0*c+y0, **kwargs)
