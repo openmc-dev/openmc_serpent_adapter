@@ -660,28 +660,18 @@ with open('surface_converted', 'w') as fo:
     fo.write(str(openmc_surfaces) + '\n')
 
 #------------------------------------Settings-----------------------------------------------
-mate = []
-materials = list(openmc_materials)
-for name in materials:
-    mate.append(openmc_materials[name])
-material = openmc.Materials(mate)
-material.export_to_xml()
 
-geometry             = openmc.Geometry(openmc_universes['0'])
-geometry.export_to_xml()
+model = openmc.Model()
+model.geometry = openmc.Geometry(openmc_universes['0'])
+model.materials = openmc.Materials(openmc_materials.values())
 
+model.settings.source = openmc.Source(space=openmc.stats.Point((0, 0, 0)))
+model.settings.batches     = 130
+model.settings.inactive    = 30
+model.settings.particles   = 10000
+model.settings.temperature = {'method': 'interpolation'}
 
-point                = openmc.stats.Point((0, 0, 0))
-source               = openmc.Source(space=point)
-
-settings             = openmc.Settings()
-settings.source      = source
-settings.batches     = 130
-settings.inactive    = 30
-settings.particles   = 10000
-settings.temperature = {'method': 'interpolation'}
-
-settings.export_to_xml()
+model.export_to_model_xml('model.xml')
 
 
 def serpent_to_openmc():
