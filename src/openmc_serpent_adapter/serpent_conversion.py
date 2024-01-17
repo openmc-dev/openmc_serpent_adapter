@@ -1,18 +1,14 @@
-#---------------------------------------------------------------------
-# Input conversion code from SERPENT to OpenMC
-#---------------------------------------------------------------------
+# SPDX-FileCopyrightText: 2023-2024 UChicago Argonne, LLC
+# SPDX-License-Identifier: MIT
+
 import argparse
+from math import sqrt
 
-import openmc
-import matplotlib.pyplot as plt
 import numpy as np
-
+import openmc
 from openmc.model.surface_composite import CompositeSurface
 from openmc.data import get_thermal_name
 from openmc.data.ace import get_metadata
-from math import sqrt
-
-from math import log10
 
 #---------------------------------------------------------------------
 # Defining the rectangular prism as a composite surface
@@ -806,3 +802,17 @@ settings.particles   = 10000
 settings.temperature = {'method': 'interpolation'}
 
 settings.export_to_xml()
+
+
+def serpent_to_openmc():
+    """Command-line interface for converting Serpent model"""
+    parser = argparse.ArgumentParser()
+    parser.add_argument('serpent_filename')
+    parser.add_argument('--merge-surfaces', action='store_true',
+                        help='Remove redundant surfaces when exporting XML')
+    parser.add_argument('--no-merge-surfaces', dest='download', action='store_false',
+                        help='Do not remove redundant surfaces when exporting XML')
+    parser.set_defaults(merge_surfaces=True)
+    args = parser.parse_args()
+
+    # TODO: refactor into functions and call accordingly
