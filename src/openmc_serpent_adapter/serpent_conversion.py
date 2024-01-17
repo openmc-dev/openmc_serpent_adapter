@@ -271,6 +271,9 @@ for line in all_lines:
             Z0 = coefficients[4]+coefficients[2]
             up = (h < 0)
             openmc_surfaces[words[1]] = openmc.model.ZConeOneSided(x0, y0, Z0, R, up)
+        elif surface_type == ('hexxc'):
+            x0, y0, d = coefficients[0], coefficients[1], coefficients[2]
+            openmc_surfaces[words[1]] = hexxc(x0, y0, d)
         elif surface_type == ('hexyc'):
             x0, y0, d = coefficients[0], coefficients[1], coefficients[2]
             openmc_surfaces[words[1]] = hexyc(x0, y0, d)
