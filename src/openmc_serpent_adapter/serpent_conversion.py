@@ -40,7 +40,6 @@ def main():
     therm_materials  = {}
     openmc_materials = {}
     openmc_lattices  = {}
-    therm_materials  = {}
 
     parser = argparse.ArgumentParser()
     parser.add_argument('input_file', nargs='?', default='main')
