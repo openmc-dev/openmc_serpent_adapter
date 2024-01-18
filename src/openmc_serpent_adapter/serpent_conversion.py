@@ -65,6 +65,7 @@ def main():
     openmc_universes = {}
     openmc_materials = {}
     openmc_lattices  = {}
+    therm_materials  = {}
 
     parser = argparse.ArgumentParser()
     parser.add_argument('input_file', type=Path)
