@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: MIT
 
 import argparse
+from pathlib import Path
+import shlex
+from typing import List
 
 import numpy as np
 import openmc
@@ -33,6 +36,29 @@ def update_openmc_surfaces(openmc_surfaces):
     return strid_to_intid
 
 
+def expand_include_cards(lines: List[str]) -> List[str]:
+    """Replace all 'include' cards"""
+    index = 0
+    while True:
+        # If we've reached end of lines, return
+        if index >= len(lines):
+            return lines
+
+        # Get words in current line
+        words = shlex.split(lines[index])
+
+        if words and words[0].lower() == 'include':
+            # Read lines from included file
+            include_path = Path(words[1])
+            with include_path.open('r') as fh:
+                insert_lines = fh.readlines()
+
+            # Replace current line with ones from file
+            lines[index:index + 1] = insert_lines
+        else:
+            index += 1
+
+
 def main():
     openmc_surfaces  = {}
     openmc_cells     = {}
@@ -43,19 +69,16 @@ def main():
     therm_materials  = {}
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('input_file', nargs='?', default='main')
+    parser.add_argument('input_file', type=Path)
     args = parser.parse_args()
 
     # Combine all files into one big list
-    all_lines = []
-    with open(args.input_file, 'r') as file_handle:
-        for line in file_handle:
-            words = line.split()
-            if words and words[0] == 'include':
-                filename = words[1][1:-1]
-                all_lines.extend(open(filename, 'r').readlines())
-            else:
-                all_lines.append(line)
+    with args.input_file.open('r') as fh:
+        all_lines = fh.readlines()
+
+    # Replace 'include' cards
+    all_lines = expand_include_cards(all_lines)
+
     #-----------------------------------------------------------------------------
     # Conversion of a SERPENT material to an OpenMC material
     # Thermal scattering materials
