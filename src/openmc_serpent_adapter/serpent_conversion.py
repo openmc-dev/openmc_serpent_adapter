@@ -63,7 +63,6 @@ def main():
     openmc_surfaces  = {}
     openmc_cells     = {}
     openmc_universes = {}
-    therm_materials  = {}
     openmc_materials = {}
     openmc_lattices  = {}
     therm_materials  = {}
@@ -672,10 +671,10 @@ def main():
     model.geometry = openmc.Geometry(openmc_universes['0'])
     model.materials = openmc.Materials(openmc_materials.values())
 
-    model.settings.source = openmc.Source(space=openmc.stats.Point((0, 0, 0)))
-    model.settings.batches     = 130
-    model.settings.inactive    = 30
-    model.settings.particles   = 10000
+    model.settings.source = openmc.IndependentSource(space=openmc.stats.Point((0, 0, 0)))
+    model.settings.batches = 130
+    model.settings.inactive = 30
+    model.settings.particles = 10000
     model.settings.temperature = {'method': 'interpolation'}
 
     model.export_to_model_xml('model.xml')
