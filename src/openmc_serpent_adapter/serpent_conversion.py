@@ -110,7 +110,7 @@ def expand_include_cards(lines: List[str]) -> List[str]:
         # Get words in current line
         words = shlex.split(lines[index])
 
-        if words and words[0].lower() == 'include':
+        if words and first_word(words) == 'include':
             # Read lines from included file
             include_path = Path(words[1])
             with include_path.open('r') as fh:
@@ -258,6 +258,16 @@ def parse_mat_mix_cards(lines: List[str], therm_materials: Dict[str, str]) -> Di
     return openmc_materials
 
 
+def parse_set_cards(lines: List[str]) -> Dict[str, List[str]]:
+    """Parse input options on 'set' cards."""
+    options = {}
+    for line in lines:
+        words = line.split()
+        if first_word(words) == 'set':
+            options[words[1]] = words[2:]
+    return options
+
+
 def main():
     openmc_surfaces  = {}
     openmc_cells     = {}
@@ -276,7 +286,7 @@ def main():
     # lines, join cards over multiple lines
     all_lines = expand_include_cards(all_lines)
     all_lines = remove_comments(all_lines)
-    all_lines = join_lines(all_lines, {'therm', 'mat', 'mix'})
+    all_lines = join_lines(all_lines, {'therm', 'mat', 'mix', 'set'})
 
     # Read thermal scattering cards
     therm_materials = parse_therm_cards(all_lines)
@@ -284,15 +294,14 @@ def main():
     # Read material and mixture cards
     openmc_materials = parse_mat_mix_cards(all_lines, therm_materials)
 
+    # Read input options on 'set' cards
+    options = parse_set_cards(all_lines)
+
     #-----------------------------------------------------------------------------
     # Conversion of a SERPENT surface to an OpenMC surface
-    ctrl = 'ctrl'
     for line in all_lines:
         words = line.split()
-        if words[0] == 'set' and words[1] == 'bc':
-            boundary = words[2]
         if words[0] == 'surf':
-
             # Read ID, surface type and coefficients
             surface_id = words[1]
             surface_type = words[2]
@@ -455,9 +464,11 @@ def main():
             else:
                 openmc_universes[cell_universe].add_cell(openmc_cells[cell_id])
 
+    boundary = options['bc'][0] if 'bc' in options else None
     for surface in outer_surfaces:
         if '-' in surface:
             surface = surface[1:]
+        # TODO: Handle all variations of 'set bc'
         if boundary == '1':
             boundary = 'vacuum'
         elif boundary == '2':
