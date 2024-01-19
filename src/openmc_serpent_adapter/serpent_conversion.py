@@ -3,6 +3,7 @@
 
 import argparse
 from pathlib import Path
+import re
 import shlex
 from typing import List
 
@@ -59,6 +60,20 @@ def expand_include_cards(lines: List[str]) -> List[str]:
             index += 1
 
 
+def remove_comments(lines: List[str]) -> List[str]:
+    """Remove comments and empty lines"""
+    text = ''.join(lines)
+
+    # Remove comments
+    text = re.sub('%.*$', '', text, flags=re.MULTILINE)
+
+    # Remove empty lines
+    lines = [line for line in text.splitlines(keepends=True) if not line.isspace()]
+
+    # TODO: Remove C-style comments: /*    */
+    return lines
+
+
 def main():
     openmc_surfaces  = {}
     openmc_cells     = {}
@@ -78,21 +93,16 @@ def main():
     # Replace 'include' cards
     all_lines = expand_include_cards(all_lines)
 
+    # Remove comments and empty lines
+    all_lines = remove_comments(all_lines)
+
     #-----------------------------------------------------------------------------
     # Conversion of a SERPENT material to an OpenMC material
     # Thermal scattering materials
     ctrl = 'ctrl'
     for line in all_lines:
         words = line.split()
-        # Get rid of comments
-        for word in words:
-            if word[0] == '%':
-                try:
-                    index_comment = words.index(word)
-                    words = words[:index_comment]
-                except ValueError:
-                    # If no comment, do nothing
-                    pass
+
         if len(words) > 3 and words[0] == 'therm':
             mat_id                              = words[1]
             mat_temp                            = words[2]
@@ -115,15 +125,6 @@ def main():
     # Materials
     for line in all_lines:
         words = line.split()
-        # Get rid of comments
-        for word in words:
-            if word[0] == '%':
-                try:
-                    index_comment = words.index(word)
-                    words = words[:index_comment]
-                except ValueError:
-                    # If no comment, do nothing
-                    pass
 
         if len(words) > 0 and (words[0] == 'surf' or words[0] == 'cell' or words[0] == 'mat'or words[0] == 'lat' or words[0] == 'set' or words[0] == 'include' or words[0] == 'plot' or words[0] == 'therm' or words[0] == 'dep' or words[0] == 'pin'):
             ctrl = words[0]
@@ -213,16 +214,6 @@ def main():
     # Conversion of a SERPENT surface to an OpenMC surface
     for line in all_lines:
         words = line.split()
-        if len(words) > 0 and words[0] == 'surf':
-            # Get rid of comments
-            for word in words:
-                if word[0] == '%':
-                    try:
-                        index_comment = words.index(word)
-                        words = words[:index_comment]
-                    except ValueError:
-                        # If no comment, do nothing
-                        pass
         if len(words) > 0 and words[0] == 'set' and words[1] == 'bc':
             boundary = words[2]
         if len(words) > 0 and words[0] == 'surf':
@@ -315,14 +306,6 @@ def main():
     for line in all_lines:
         words = line.split()
         if len(words) > 0 and words[0] == 'cell':
-        # Get rid of comments
-            try:
-                index_comment = words.index('%')
-                words         = words[:index_comment]
-            except ValueError:
-                # If no comment, do nothing
-                pass
-
             # Creating an outside universe for the lattice outside
             openmc_universes['outside'] = openmc.Universe()
 
@@ -415,15 +398,7 @@ def main():
     for line in all_lines:
         words = line.split()
 
-        # Get rid of comments
-        try:
-            index_comment = words.index('%')
-            words         = words[:index_comment]
-        except ValueError:
-            # If no comment, do nothing
-            pass
-
-            # Read ID, universe, material and coefficients
+        # Read ID, universe, material and coefficients
         if len(words) > 0 and words[0] == 'pin':
             cell_universe = words[1]
             ctrl = words[0]
@@ -456,15 +431,6 @@ def main():
     number_of_rings = 0
     for line in all_lines:
         words = line.split()
-        # Get rid of comments
-        for word in words:
-            if word[0] == '%':
-                try:
-                    index_comment = words.index(word)
-                    words         = words[:index_comment]
-                except ValueError:
-                    # If no comment, do nothing
-                    pass
 
         if len(words) > 0 and words[0] == 'lat':
             z0 = []
@@ -632,14 +598,6 @@ def main():
     for line in all_lines:
         words = line.split()
         if len(words) > 0 and words[0] == 'cell':
-        # Get rid of comments
-            try:
-                index_comment = words.index('%')
-                words         = words[:index_comment]
-            except ValueError:
-                # If no comment, do nothing
-                pass
-
             # Read ID, universe, material and coefficients
             cell_id = words[1]
             cell_universe = words[2]
