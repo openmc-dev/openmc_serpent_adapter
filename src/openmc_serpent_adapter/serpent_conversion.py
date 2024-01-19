@@ -582,20 +582,15 @@ def main():
             # Missing circular cluster array (4), 3D cuboidal lattice (11), x-type triangular lattice (14)
             # 3D x-type hexagonal prism lattice (12), and 3D y-type hexagonal prism lattice (13)
             elif lattice_type == '4':
-                print('Lattice geometry: circular cluster array is not supported!')
-                quit
+                raise ValueError('Lattice geometry: circular cluster array is not supported!')
             elif lattice_type == '11':
-                print('Lattice geometry: 3D cuboidal lattice is not supported!')
-                quit
+                raise ValueError('Lattice geometry: 3D cuboidal lattice is not supported!')
             elif lattice_type == '12':
-                print('Lattice geometry: 3D x-type hexagonal prism lattice is not supported!')
-                quit
+                raise ValueError('Lattice geometry: 3D x-type hexagonal prism lattice is not supported!')
             elif lattice_type == '13':
-                print('Lattice geometry: 3D y-type hexagonal prism lattice is not supported!')
-                quit
+                raise ValueError('Lattice geometry: 3D y-type hexagonal prism lattice is not supported!')
             elif lattice_type == '14':
-                print('Lattice geometry: x-type triangular lattice is not defined supported!')
-                quit
+                raise ValueError('Lattice geometry: x-type triangular lattice is not defined supported!')
 
             # !!!!!!Think about it again!!!!!!!!! Does it work if we have multiple lattice geometries
             # openmc_lattices[lattice_id].outer = openmc_universes['outside']
