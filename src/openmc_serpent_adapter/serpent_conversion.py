@@ -107,11 +107,12 @@ def expand_include_cards(lines: List[str]) -> List[str]:
             return lines
 
         # Get words in current line
-        words = shlex.split(lines[index])
+        words = lines[index].split()
 
         if words and first_word(words) == 'include':
-            # Read lines from included file
-            include_path = Path(words[1])
+            # Read lines from included file. Need to use shlex splitting to
+            # handle paths with spaces embedded
+            include_path = Path(shlex.split(lines[index])[1])
             with include_path.open('r') as fh:
                 insert_lines = fh.readlines()
 
@@ -405,9 +406,9 @@ def main():
 
     # Preprocessing steps: replace 'include' cards, remove comments and empty
     # lines, join cards over multiple lines
-    all_lines = remove_comments(all_lines)
     all_lines = expand_include_cards(all_lines)
-    all_lines = join_lines(all_lines, {'therm', 'mat', 'mix', 'set', 'surf', 'pin'})
+    all_lines = remove_comments(all_lines)
+    all_lines = join_lines(all_lines, {'therm', 'mat', 'mix', 'set', 'surf', 'pin', 'cell'})
 
     # Read thermal scattering cards
     therm_materials = parse_therm_cards(all_lines)
@@ -427,80 +428,77 @@ def main():
     inner_surfaces = []
     for line in all_lines:
         words = line.split()
-        if words[0] == 'cell':
-            # Creating an outside universe for the lattice outside
-            openmc_universes['outside'] = openmc.Universe()
+        if first_word(words) != 'cell':
+            continue
 
-            # Read ID, universe, material and coefficients
-            cell_id = words[1]
-            cell_universe = words[2]
-            if cell_universe not in openmc_universes:
-                openmc_universes[cell_universe]  = openmc.Universe()
-            if words[3] == 'fill':
-                coefficients            = [str(x) for x in words[5:]]
-                openmc_cells[cell_id]        = openmc.Cell()
-            elif words[3] == 'void':
-                openmc_cells[cell_id]   = openmc.Cell(fill=None)
-                coefficients            = [str(x) for x in words[4:]]
-            elif words[3] == 'outside':
-                openmc_cells[cell_id]   = openmc.Cell(fill=None)
-                coefficients            = [str(x) for x in words[4:]]
-                openmc_universes['outside'].add_cell(openmc_cells[cell_id])
-            else:
-                cell_material           = words[3]
-                cell_material           = openmc_materials[cell_material]
-                coefficients            = [str(x) for x in words[4:]]
-            for x in range(len(coefficients)-1, 0, -1):
-                if coefficients[x]=='-':
-                    coefficients[x+1]=(f'-{coefficients[x+1]}')
-                    del(coefficients[x])
+        # Creating an outside universe for the lattice outside
+        openmc_universes['outside'] = openmc.Universe()
 
-            # Creating regions
-            coefficient = ' '.join(coefficients)
+        # Read ID, universe, material and coefficients
+        cell_id = words[1]
+        cell_universe = words[2]
+        if cell_universe not in openmc_universes:
+            openmc_universes[cell_universe] = openmc.Universe()
+        if words[3] == 'fill':
+            coefficients = words[5:]
+            openmc_cells[cell_id] = openmc.Cell()
+        elif words[3] == 'void':
+            openmc_cells[cell_id] = openmc.Cell()
+            coefficients = words[4:]
+        elif words[3] == 'outside':
+            openmc_cells[cell_id] = openmc.Cell()
+            coefficients = words[4:]
+            openmc_universes['outside'].add_cell(openmc_cells[cell_id])
+        else:
+            cell_material = openmc_materials[words[3]]
+            coefficients = words[4:]
+
+        # TODO: Should we keep this fixup?
+        for x in range(len(coefficients)-1, 0, -1):
+            if coefficients[x] == '-':
+                coefficients[x+1] = f'-{coefficients[x+1]}'
+                del coefficients[x]
+
+        # Creating regions
+        coefficient = ' '.join(coefficients)
+        for name, surface_id in sorted(name_to_id.items(), key=lambda x: len(x[0]), reverse=True):
+            coefficient = coefficient.replace(name, str(surface_id))
+        try:
+            cell_region  = openmc.Region.from_expression(expression=coefficient, surfaces=openmc_surfaces)
+        except Exception:
+            raise ValueError(f'Failed to convert cell definition: {line}')
+
+        # Outer boundary conditions
+        for x in range(len(coefficients)):
             for name, surface_id in sorted(name_to_id.items(), key=lambda x: len(x[0]), reverse=True):
-                coefficient = coefficient.replace(name, str(surface_id))
-            try:
-                cell_region  = openmc.Region.from_expression(expression = coefficient, surfaces = openmc_surfaces)
-            except Exception:
-                print(f'Failed on line: {line}')
-                raise
+                coefficients[x] = coefficients[x].replace(name, str(surface_id))
+        if words[3] != 'outside':
+            for coefficient in coefficients:
+                if coefficient not in inner_surfaces:
+                    inner_surfaces.append(coefficient)
+        if words[3] == 'outside':
+            for coefficient in coefficients:
+                if coefficient not in outer_surfaces:
+                    outer_surfaces.append(coefficient)
+            for surface in outer_surfaces:
+                for name in inner_surfaces:
+                    if surface == name :
+                        outer_surfaces.remove(surface)
 
-            # Outer boundary conditions
-            for x in range(len(coefficients)):
-                for name, surface_id in sorted(name_to_id.items(), key=lambda x: len(x[0]), reverse=True):
-                    coefficients[x] = coefficients[x].replace(name, str(surface_id))
-            if words[3] != 'outside':
-                for coefficient in coefficients:
-                    if coefficient not in inner_surfaces:
-                        inner_surfaces.append(coefficient)
-            if words[3] == 'outside':
-                #print(f'cell_id = {words[1]}, coefficients = {coefficients}')
-                for coefficient in coefficients:
-                    if coefficient not in outer_surfaces:
-                        outer_surfaces.append(coefficient)
-                for surface in outer_surfaces:
-                    for name in inner_surfaces:
-                        if surface == name :
-                            outer_surfaces.remove(surface)
+        # Convert to OpenMC cell and add to dictionary
+        if words[3] == 'fill':
+            if words[4] in openmc_universes:
+                openmc_cells[cell_id] = openmc.Cell(fill=openmc_universes[words[4]], region=cell_region)
+            elif words[4] in openmc_lattices:
+                openmc_cells[cell_id] = openmc.Cell(fill=openmc_lattices[words[4]], region=cell_region)
+        elif words[3] in ('void', 'outside'):
+            openmc_cells[cell_id] = openmc.Cell(region=cell_region)
+        else:
+            openmc_cells[cell_id] = openmc.Cell(fill=cell_material, region=cell_region)
 
-            # Convert to OpenMC cell and add to dictionary
-            if words[3] == 'fill':
-                if words[4] in openmc_universes:
-                    openmc_cells[cell_id]        = openmc.Cell(fill=openmc_universes[words[4]], region=cell_region)
-                elif words[4] in openmc_lattices:
-                    openmc_cells[cell_id]        = openmc.Cell(fill=openmc_lattices[words[4]], region=cell_region)
-            elif words[3] == 'void':
-                openmc_cells[cell_id]            = openmc.Cell(fill=None, region=cell_region)
-            elif words[3] == 'outside':
-                openmc_cells[cell_id]            = openmc.Cell(fill=None, region=cell_region)
-            else:
-                openmc_cells[cell_id]            = openmc.Cell(fill=cell_material, region=cell_region)
-
-            # Adding the cell to a universe
-            if words[3] == 'fill':
-                continue
-            else:
-                openmc_universes[cell_universe].add_cell(openmc_cells[cell_id])
+        # Adding the cell to a universe
+        if words[3] != 'fill':
+            openmc_universes[cell_universe].add_cell(openmc_cells[cell_id])
 
     boundary = options['bc'][0] if 'bc' in options else None
     for surface in outer_surfaces:
