@@ -5,7 +5,7 @@ import argparse
 from pathlib import Path
 import re
 import shlex
-from typing import List
+from typing import List, Set, Union
 
 import numpy as np
 import openmc
@@ -61,6 +61,10 @@ INPUT_KEYWORDS = [
     'utrans',
     'wwgen',
     'wwin'
+]
+
+MATERIAL_KEYWORDS = [
+    'tmp', 'tms', 'tft', 'rgb', 'vol', 'mass', 'burn', 'fix', 'moder'
 ]
 
 
@@ -124,6 +128,29 @@ def remove_comments(lines: List[str]) -> List[str]:
     return lines
 
 
+def first_word(input: Union[str, List[str]]) -> str:
+    """Get lowercased first word from a line or list of words"""
+    words = input.split() if isinstance(input, str) else input
+    return words[0].lower()
+
+
+def join_lines(lines: List[str], cards: Set[str]) -> List[str]:
+    """Join input for a single card over multiple lines into a single line"""
+    index = 0
+    while True:
+        # If we've reached end of lines, return
+        if index >= len(lines):
+            return lines
+
+        if first_word(lines[index]) in cards:
+            while index + 1 < len(lines):
+                if first_word(lines[index + 1]) in INPUT_KEYWORDS:
+                    break
+                lines[index] += lines.pop(index + 1)
+
+        index += 1
+
+
 def main():
     openmc_surfaces  = {}
     openmc_cells     = {}
@@ -146,33 +173,32 @@ def main():
     # Remove comments and empty lines
     all_lines = remove_comments(all_lines)
 
+    # Join cards over multiple lines
+    all_lines = join_lines(all_lines, {'therm'})
+
     #-----------------------------------------------------------------------------
     # Conversion of a SERPENT material to an OpenMC material
     # Thermal scattering materials
-    ctrl = 'ctrl'
     for line in all_lines:
         words = line.split()
+        if first_word(words) != 'therm':
+            continue
 
-        if len(words) > 3 and words[0] == 'therm':
-            mat_id                              = words[1]
-            mat_temp                            = words[2]
-            materials                           = [words[3]]
+        mat_id = words[1]
+        if len(words) > 3:
+            mat_temp = words[2]
+            materials = words[3:]
+        else:
+            materials = words[2:]
 
-            if '.' in words[3]:
-                name, xs = words[3].split('.')
-            else:
-                name = words[3]
-            therm_materials[mat_id] = get_thermal_name(str(name))
-        elif len(words) <= 3 and words[0] == 'therm':
-            mat_id                              = words[1]
-            materials                           = [words[2]]
+        if '.' in materials[0]:
+            name, _ = materials[0].split('.')
+        else:
+            name = materials[0]
+        therm_materials[mat_id] = get_thermal_name(name)
 
-            if '.' in words[2]:
-                name, xs = words[2].split('.')
-            else:
-                name = words[2]
-            therm_materials[mat_id] = get_thermal_name(str(name))
     # Materials
+    ctrl = 'ctrl'
     for line in all_lines:
         words = line.split()
 
