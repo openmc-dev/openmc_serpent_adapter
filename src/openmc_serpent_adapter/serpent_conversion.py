@@ -14,6 +14,56 @@ from openmc.data.ace import get_metadata
 
 from .serpent_geometry import hexxc, hexyc, sqc, vertical_stack
 
+
+INPUT_KEYWORDS = [
+    'branch',
+    'casematrix',
+    'cell',
+    'coef',
+    'datamesh',
+    'dep',
+    'det',
+    'div',
+    'dtrans',
+    'ene',
+    'ftrans',
+    'fun',
+    'hisv',
+    'ifc',
+    'include',
+    'lat',
+    'mat',
+    'mesh',
+    'mflow',
+    'mix',
+    'nest',
+    'particle',
+    'pbed',
+    'phb',
+    'pin',
+    'plot',
+    'rep',
+    'sample',
+    'sens',
+    'set',
+    'solid',
+    'src',
+    'strans',
+    'surf',
+    'therm',
+    'thermstoch',
+    'tme',
+    'trans',
+    'transa',
+    'transb',
+    'transv',
+    'umsh',
+    'utrans',
+    'wwgen',
+    'wwin'
+]
+
+
 #---------------------------------------------------------------------
 # Definig a new surface ID with all integers
 def update_openmc_surfaces(openmc_surfaces):
@@ -86,7 +136,7 @@ def main():
     parser.add_argument('input_file', type=Path)
     args = parser.parse_args()
 
-    # Combine all files into one big list
+    # Read lines from input file
     with args.input_file.open('r') as fh:
         all_lines = fh.readlines()
 
