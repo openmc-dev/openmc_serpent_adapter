@@ -431,19 +431,20 @@ def main():
         if first_word(words) != 'cell':
             continue
 
-        # TODO: Remove
-        openmc.Universe()
+        openmc.Universe()  # TODO: remove
 
         # Read ID, universe, material and coefficients
         cell_id = words[1]
         cell_universe = words[2]
         if cell_universe not in openmc_universes:
+            # TODO: Assign universe ID
             openmc_universes[cell_universe] = openmc.Universe()
+
         if words[3] == 'fill':
             coefficients = words[5:]
             openmc_cells[cell_id] = openmc.Cell()
         elif words[3] in ('void', 'outside'):
-            openmc_cells[cell_id] = openmc.Cell()
+            openmc.Cell()  # TODO: remove
             coefficients = words[4:]
         else:
             cell_material = openmc_materials[words[3]]
@@ -465,9 +466,7 @@ def main():
             raise ValueError(f'Failed to convert cell definition: {line}')
 
         # Outer boundary conditions
-        for x in range(len(coefficients)):
-            for name, surface_id in sorted(name_to_id.items(), key=lambda x: len(x[0]), reverse=True):
-                coefficients[x] = coefficients[x].replace(name, str(surface_id))
+        coefficients = coefficient.split()
         if words[3] != 'outside':
             for coefficient in coefficients:
                 if coefficient not in inner_surfaces:
@@ -478,7 +477,7 @@ def main():
                     outer_surfaces.append(coefficient)
             for surface in outer_surfaces:
                 for name in inner_surfaces:
-                    if surface == name :
+                    if surface == name:
                         outer_surfaces.remove(surface)
 
         # Convert to OpenMC cell and add to dictionary
