@@ -356,6 +356,40 @@ def parse_surf_cards(lines: List[str]) -> Dict[str, openmc.Surface]:
     return openmc_surfaces, name_to_id
 
 
+def parse_pin_cards(lines: List[str], materials: Dict[str, openmc.Material], universes: Dict[str, openmc.Universe]):
+    """Parse 'pin' cards"""
+    for line in lines:
+        words = line.split()
+        if first_word(words) != 'pin':
+            continue
+
+        universe_name = words[1]
+
+        # Iteratively read materials/universes and outer radii
+        fills = []
+        surfaces = []
+        index = 2
+        while True:
+            if words[index] == 'fill':
+                fills.append(universes[words[index + 1]])
+                index += 2
+            else:
+                fills.append(materials[words[index]])
+                index += 1
+            if index >= len(words):
+                break
+            surfaces.append(openmc.ZCylinder(r=float(words[index])))
+            index += 1
+
+        # Construct new universe for pin
+        if surfaces:
+            universes[universe_name] = openmc.model.pin(surfaces, fills)
+        else:
+            # Special case where no surfaces are given
+            cell = openmc.Cell(fill=fills[0])
+            universes[universe_name] = openmc.Universe(cells=[cell])
+
+
 def main():
     openmc_cells     = {}
     openmc_universes = {}
@@ -371,9 +405,9 @@ def main():
 
     # Preprocessing steps: replace 'include' cards, remove comments and empty
     # lines, join cards over multiple lines
-    all_lines = expand_include_cards(all_lines)
     all_lines = remove_comments(all_lines)
-    all_lines = join_lines(all_lines, {'therm', 'mat', 'mix', 'set', 'surf'})
+    all_lines = expand_include_cards(all_lines)
+    all_lines = join_lines(all_lines, {'therm', 'mat', 'mix', 'set', 'surf', 'pin'})
 
     # Read thermal scattering cards
     therm_materials = parse_therm_cards(all_lines)
@@ -481,38 +515,8 @@ def main():
             boundary = 'periodic'
         openmc_surfaces[int(surface)].boundary_type = boundary
 
-    #--------------------Pin definition---------------------------------------
-    ctrl = 'ctrl'
-    surfaces = []
-    items = []
-    for line in all_lines:
-        words = line.split()
-
-        # Read ID, universe, material and coefficients
-        if words and words[0] == 'pin':
-            cell_universe = words[1]
-            ctrl = words[0]
-            surfaces = []
-            items = []
-        else:
-            if words and (words[0] in ('surf', 'cell', 'mat', 'lat', 'set', 'include', 'plot', 'therm', 'dep')):
-                ctrl = words[0]
-            elif len(words) > 1 and ctrl == 'pin' and words[0] != 'pin':
-                material_region = words[0]
-                outer_radi = float(words[1])
-                surface = openmc.ZCylinder(r = outer_radi)
-                surfaces.append(surface)
-                item = openmc_materials[material_region]
-                items.append(item)
-            elif len(words) == 1 and ctrl == 'pin' and words[0] != 'pin':
-                material_region = words[0]
-                item = openmc_materials[material_region]
-                items.append(item)
-                if surfaces == []:
-                    cell = openmc.Cell(fill=items)
-                    openmc_universes[cell_universe] = openmc.Universe(cells=[cell])
-                else:
-                    openmc_universes[cell_universe] = openmc.model.pin(surfaces, items, subdivisions=None, divide_vols=True)
+    # Read pin geometry definitions
+    parse_pin_cards(all_lines, openmc_materials, openmc_universes)
 
     # NOTE: If there is only one material and no surface, this code does not work. Needs to be fixed
     #---------------------------------------------------------------------------------------------------------------------------
