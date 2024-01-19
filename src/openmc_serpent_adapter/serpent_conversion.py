@@ -5,7 +5,7 @@ import argparse
 from pathlib import Path
 import re
 import shlex
-from typing import List, Set, Union
+from typing import List, Set, Union, Dict
 
 import numpy as np
 import openmc
@@ -151,13 +151,33 @@ def join_lines(lines: List[str], cards: Set[str]) -> List[str]:
         index += 1
 
 
+def parse_therm_cards(lines: List[str]) -> Dict[str, str]:
+    """Parse 'therm' cards"""
+    therm_materials  = {}
+    for line in lines:
+        words = line.split()
+        if first_word(words) != 'therm':
+            continue
+
+        if len(words) > 3:
+            therm_data = {'name': words[1], 'temp': words[2], 'lib': words[3:]}
+        else:
+            therm_data = {'name': words[1], 'lib': words[2:]}
+
+        name = therm_data['lib'][0]
+        if '.' in name:
+            name, _ = name.split('.')
+        therm_materials[therm_data['name']] = get_thermal_name(name)
+
+    return therm_materials
+
+
 def main():
     openmc_surfaces  = {}
     openmc_cells     = {}
     openmc_universes = {}
     openmc_materials = {}
     openmc_lattices  = {}
-    therm_materials  = {}
 
     parser = argparse.ArgumentParser()
     parser.add_argument('input_file', type=Path)
@@ -167,35 +187,14 @@ def main():
     with args.input_file.open('r') as fh:
         all_lines = fh.readlines()
 
-    # Replace 'include' cards
+    # Preprocessing steps: replace 'include' cards, remove comments and empty
+    # lines, join cards over multiple lines
     all_lines = expand_include_cards(all_lines)
-
-    # Remove comments and empty lines
     all_lines = remove_comments(all_lines)
-
-    # Join cards over multiple lines
     all_lines = join_lines(all_lines, {'therm'})
 
-    #-----------------------------------------------------------------------------
-    # Conversion of a SERPENT material to an OpenMC material
-    # Thermal scattering materials
-    for line in all_lines:
-        words = line.split()
-        if first_word(words) != 'therm':
-            continue
-
-        mat_id = words[1]
-        if len(words) > 3:
-            mat_temp = words[2]
-            materials = words[3:]
-        else:
-            materials = words[2:]
-
-        if '.' in materials[0]:
-            name, _ = materials[0].split('.')
-        else:
-            name = materials[0]
-        therm_materials[mat_id] = get_thermal_name(name)
+    # Read therma
+    therm_materials = parse_therm_cards(all_lines)
 
     # Materials
     ctrl = 'ctrl'
