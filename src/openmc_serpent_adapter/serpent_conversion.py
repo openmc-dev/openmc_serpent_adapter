@@ -81,20 +81,19 @@ MATERIAL_KEYWORD_PARAMS = {
 def update_openmc_surfaces(openmc_surfaces):
     # Determine maximum integer ID
     max_id = 0
-    for surface_id in openmc_surfaces.keys():
-        if surface_id.isnumeric():
-            max_id = max(max_id, int(surface_id))
+    for name in openmc_surfaces.keys():
+        if name.isnumeric():
+            max_id = max(max_id, int(name))
 
     # Change non-numeric keys to numeric
     strid_to_intid = {}
-    for surface_id, surface in openmc_surfaces.items():
-        if not surface_id.isnumeric():
+    for name in openmc_surfaces.keys():
+        if not name.isnumeric():
             max_id += 1
-            strid_to_intid[surface_id] = max_id
+            strid_to_intid[name] = max_id
 
     for str_id, int_id in strid_to_intid.items():
-        openmc_surfaces[str(int_id)] = openmc_surfaces[str_id]
-        del openmc_surfaces[str_id]
+        openmc_surfaces[str(int_id)] = openmc_surfaces.pop(str_id)
 
     return strid_to_intid
 
@@ -268,38 +267,10 @@ def parse_set_cards(lines: List[str]) -> Dict[str, List[str]]:
     return options
 
 
-def main():
-    openmc_surfaces  = {}
-    openmc_cells     = {}
-    openmc_universes = {}
-    openmc_lattices  = {}
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument('input_file', type=Path)
-    args = parser.parse_args()
-
-    # Read lines from input file
-    with args.input_file.open('r') as fh:
-        all_lines = fh.readlines()
-
-    # Preprocessing steps: replace 'include' cards, remove comments and empty
-    # lines, join cards over multiple lines
-    all_lines = expand_include_cards(all_lines)
-    all_lines = remove_comments(all_lines)
-    all_lines = join_lines(all_lines, {'therm', 'mat', 'mix', 'set', 'surf'})
-
-    # Read thermal scattering cards
-    therm_materials = parse_therm_cards(all_lines)
-
-    # Read material and mixture cards
-    openmc_materials = parse_mat_mix_cards(all_lines, therm_materials)
-
-    # Read input options on 'set' cards
-    options = parse_set_cards(all_lines)
-
-    #-----------------------------------------------------------------------------
-    # Conversion of a SERPENT surface to an OpenMC surface
-    for line in all_lines:
+def parse_surf_cards(lines: List[str]) -> Dict[str, openmc.Surface]:
+    """Parse 'surf' cards"""
+    openmc_surfaces = {}
+    for line in lines:
         words = line.split()
         if first_word(words) == 'surf':
             # Read ID, surface type and coefficients
@@ -380,8 +351,41 @@ def main():
     name_to_id = update_openmc_surfaces(openmc_surfaces)
     keys = list(openmc_surfaces.keys())
     for key in keys:
-        openmc_surfaces[int(key)] = openmc_surfaces[key]
-        del openmc_surfaces[key]
+        openmc_surfaces[int(key)] = openmc_surfaces.pop(key)
+
+    return openmc_surfaces, name_to_id
+
+
+def main():
+    openmc_cells     = {}
+    openmc_universes = {}
+    openmc_lattices  = {}
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('input_file', type=Path)
+    args = parser.parse_args()
+
+    # Read lines from input file
+    with args.input_file.open('r') as fh:
+        all_lines = fh.readlines()
+
+    # Preprocessing steps: replace 'include' cards, remove comments and empty
+    # lines, join cards over multiple lines
+    all_lines = expand_include_cards(all_lines)
+    all_lines = remove_comments(all_lines)
+    all_lines = join_lines(all_lines, {'therm', 'mat', 'mix', 'set', 'surf'})
+
+    # Read thermal scattering cards
+    therm_materials = parse_therm_cards(all_lines)
+
+    # Read material and mixture cards
+    openmc_materials = parse_mat_mix_cards(all_lines, therm_materials)
+
+    # Read input options on 'set' cards
+    options = parse_set_cards(all_lines)
+
+    # Read surfaces on 'surf' cards
+    openmc_surfaces, name_to_id = parse_surf_cards(all_lines)
 
     #--------------------------------------------------------------------------------
     #Conversion of a SERPENT cell and universe to a OpenMC cell and universe
