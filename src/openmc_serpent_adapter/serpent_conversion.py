@@ -113,7 +113,7 @@ def main():
             else:
                 name = words[3]
             therm_materials[mat_id] = get_thermal_name(str(name))
-        elif len(words) > 0 and len(words) <= 3 and words[0] == 'therm':
+        elif words and len(words) <= 3 and words[0] == 'therm':
             mat_id                              = words[1]
             materials                           = [words[2]]
 
@@ -126,16 +126,16 @@ def main():
     for line in all_lines:
         words = line.split()
 
-        if len(words) > 0 and (words[0] == 'surf' or words[0] == 'cell' or words[0] == 'mat'or words[0] == 'lat' or words[0] == 'set' or words[0] == 'include' or words[0] == 'plot' or words[0] == 'therm' or words[0] == 'dep' or words[0] == 'pin'):
+        if words and (words[0] in ('surf', 'cell', 'lat', 'set', 'include', 'plot', 'therm', 'dep', 'pin')):
             ctrl = words[0]
 
-        if len(words) > 0 and words[0] == 'mat':
+        if words and words[0] == 'mat':
             control = 'mat'
-        elif len(words) > 0 and (words[0] == 'lat' or words[0] == 'surf' or words[0] == 'cell' or words[0] == 'mix' or words[0] == 'set'):
+        elif words and (words[0] in ('lat', 'surf', 'cell', 'mix', 'set')):
             control = 0
 
         # Material cards
-        if len(words) > 0 and words[0] == 'mat':
+        if words and words[0] == 'mat':
             mat_id                      = words[1]
             openmc_materials[mat_id]    = openmc.Material()
             if words[2] != 'sum':
@@ -151,17 +151,17 @@ def main():
                 # OpenMC does not support thermal scattering tables in mixing materials
                 # For the future and the general use of conversion file, it needs to be fixed in the source code!!!!
                 elif words[x] == 'moder':
-                        openmc_materials[mat_id].add_s_alpha_beta(str(therm_materials[str(words[x+1])]))
+                    openmc_materials[mat_id].add_s_alpha_beta(str(therm_materials[str(words[x+1])]))
             mix     = []
             mix_per = []
         # Mixture cards
-        elif len(words) > 0 and words[0] == 'mix':
+        elif words and words[0] == 'mix':
             mat_id                      = words[1]
             openmc_materials[mat_id]    = openmc.Material()
             mix     = []
             mix_per = []
 
-        elif len(words) > 0 and words[0] in openmc_materials and ctrl == 'mix':
+        elif words and words[0] in openmc_materials and ctrl == 'mix':
             mix_id      = words[0]
             mix_percent = float(words[1])/100
             percent     = f'{mix_percent:.3f}'
@@ -172,7 +172,7 @@ def main():
             else:
                 openmc_materials[mat_id]    = openmc.Material.mix_materials(mix, mix_per, 'wo')
         # Adding materials to the material card
-        elif len(words) > 0 and words[0] != 'mix' and words[0] != 'pin' and words[0] != 'mat' and words[0] != 'therm' and words[0] != 'cell' and words[0] != 'surf' and words[0] != 'set' and words[0] != 'lat' and words[0] not in openmc_materials and control == 'mat':
+        elif words and (words[0] not in ('mix', 'pin', 'mat', 'therm', 'cell', 'surf', 'set', 'lat')) and words[0] not in openmc_materials and control == 'mat':
             nuclide = words[0]
             percent = float(words[1])
             if '.' in nuclide:
@@ -214,9 +214,9 @@ def main():
     # Conversion of a SERPENT surface to an OpenMC surface
     for line in all_lines:
         words = line.split()
-        if len(words) > 0 and words[0] == 'set' and words[1] == 'bc':
+        if words and words[0] == 'set' and words[1] == 'bc':
             boundary = words[2]
-        if len(words) > 0 and words[0] == 'surf':
+        if words and words[0] == 'surf':
 
             # Read ID, surface type and coefficients
             surface_id = words[1]
@@ -305,7 +305,7 @@ def main():
     inner_surfaces = []
     for line in all_lines:
         words = line.split()
-        if len(words) > 0 and words[0] == 'cell':
+        if words and words[0] == 'cell':
             # Creating an outside universe for the lattice outside
             openmc_universes['outside'] = openmc.Universe()
 
@@ -399,13 +399,13 @@ def main():
         words = line.split()
 
         # Read ID, universe, material and coefficients
-        if len(words) > 0 and words[0] == 'pin':
+        if words and words[0] == 'pin':
             cell_universe = words[1]
             ctrl = words[0]
             surfaces = []
             items = []
         else:
-            if len(words) > 0 and (words[0] == 'surf' or words[0] == 'cell' or words[0] == 'mat'or words[0] == 'lat' or words[0] == 'set' or words[0] == 'include' or words[0] == 'plot' or words[0] == 'therm' or words[0] == 'dep'):
+            if words and (words[0] in ('surf', 'cell', 'mat', 'lat', 'set', 'include', 'plot', 'therm', 'dep')):
                 ctrl = words[0]
             elif len(words) > 1 and ctrl == 'pin' and words[0] != 'pin':
                 material_region = words[0]
@@ -432,7 +432,7 @@ def main():
     for line in all_lines:
         words = line.split()
 
-        if len(words) > 0 and words[0] == 'lat':
+        if words and words[0] == 'lat':
             z0 = []
             uni = []
             lattice_id   = words[1]
@@ -510,16 +510,15 @@ def main():
             # !!!!!!Think about it again!!!!!!!!! Does it work if we have multiple lattice geometries
             # openmc_lattices[lattice_id].outer = openmc_universes['outside']
 
-        #if (len(words) > 0 and words[0] == 'mat' or words[0] == 'surf' or words[0] == 'cell' or words[0] == 'lat' or words[0] == 'mix'):
-        if len(words) > 0 and (words[0] == 'surf' or words[0] == 'cell' or words[0] == 'mat'or words[0] == 'lat' or words[0] == 'set' or words[0] == 'include' or words[0] == 'plot' or words[0] == 'therm'or words[0] == 'dep'):
+        if words and (words[0] in ('surf', 'cell', 'mat', 'lat', 'set', 'include', 'plot', 'therm', 'dep')):
             ctrl = words[0]
             #print(ctrl)
 
-        if len(words) > 0 and words[0] != 'surf' and words[0] != 'cell' and lattice_type =='9' and words[0] != 'lat' and words[0] != 'plot' and words[0] != 'set':
+        if words and (words[0] not in ('surf', 'cell', 'lat', 'plot', 'set')) and lattice_type =='9':
             z0.append(float(words[0]))
             uni.append(openmc_universes[words[1]])
             openmc_lattices[lattice_id]                 = vertical_stack(z0, uni, x0, y0)
-        elif len(words) > 0 and words[0] != 'surf' and words[0] != 'mat' and ctrl != 'mat' and ctrl != 'dep' and words[0] != 'cell' and lattice_type !='9' and words[0] != 'lat'and words[0] != 'set' and words[0] != 'include' and words[0] != 'plot' and words[0] != 'therm' and words[0] != 'pin' and words[0] != 'dep' and words[0] not in openmc_materials:
+        elif words and (words[0] not in ('surf', 'mat', 'cell', 'lat', 'set', 'include', 'plot', 'therm', 'pin', 'dep')) and ctrl != 'mat' and ctrl != 'dep' and lattice_type !='9' and words[0] not in openmc_materials:
             if lattice_type == '6' or lattice_type == '1':
                 for x in range(len(words)):
                     words[x]                                = openmc_universes[words[x]]
@@ -528,11 +527,6 @@ def main():
                 lattice                                     = openmc_lattices[lattice_id]
                 lattice.universes                           = list(reversed(uni))
             elif lattice_type == '2':
-                #print('Hexagonal lattice is not supported!')
-                # for x in range(len(words)):
-                #     words[x]                                = openmc_universes[words[x]]
-                # control                                     = words
-            #print(control)
                 uni.append(words)
                 if len(uni) == int(nx):
                     for n in range(int(nx)):
@@ -540,7 +534,6 @@ def main():
                             uni[n] = uni[n][-(number_of_rings+n):]
                         elif n >= number_of_rings:
                             uni[n] = uni[n][:(number_of_rings-(n+1))]
-                        #print(uni[n])
 
     # !!!!!This is NOT going to work with the multiple lattices in one geometry
     # Conversion of hexagonal lattice geometry
@@ -586,7 +579,6 @@ def main():
             for i in range(len(ring)):
                 ring[i] = openmc_universes[ring[i]]
             name = f'{r+1}.ring'
-            #print(name, ring)
             ctrl = ctrl - 1
             nx = nx - 1
         #print(rings)
@@ -597,7 +589,7 @@ def main():
     # Creating cells with 'fill' command
     for line in all_lines:
         words = line.split()
-        if len(words) > 0 and words[0] == 'cell':
+        if words and words[0] == 'cell':
             # Read ID, universe, material and coefficients
             cell_id = words[1]
             cell_universe = words[2]
