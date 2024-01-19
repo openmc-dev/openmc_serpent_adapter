@@ -274,76 +274,76 @@ def parse_surf_cards(lines: List[str]) -> Dict[str, openmc.Surface]:
         words = line.split()
         if first_word(words) == 'surf':
             # Read ID, surface type and coefficients
-            _, surface_id, surface_type, *coefficients = words
+            _, name, surface_type, *coefficients = words
             coefficients = [float(x) for x in coefficients]
 
             # Convert to OpenMC surface and add to dictionary
             if surface_type == 'px':
-                openmc_surfaces[surface_id] = openmc.XPlane(coefficients[0])
+                openmc_surfaces[name] = openmc.XPlane(coefficients[0])
             elif surface_type == 'py':
-                openmc_surfaces[surface_id] = openmc.YPlane(coefficients[0])
+                openmc_surfaces[name] = openmc.YPlane(coefficients[0])
             elif surface_type == 'pz':
-                openmc_surfaces[surface_id] = openmc.ZPlane(coefficients[0])
+                openmc_surfaces[name] = openmc.ZPlane(coefficients[0])
             elif surface_type in ('cyl', 'cylz'):
                 if len(coefficients) == 3:
                     x0, y0, r = coefficients
-                    openmc_surfaces[surface_id] = openmc.ZCylinder(x0, y0, r)
+                    openmc_surfaces[name] = openmc.ZCylinder(x0, y0, r)
                 elif len(coefficients) == 5:
                     x0, y0, r, z0, z1 = coefficients
                     center_base = (x0, y0, z0)
                     height = z1 - z0
                     radius = r
-                    openmc_surfaces[surface_id] = openmc.model.RightCircularCylinder(center_base, height, radius, axis='z')
+                    openmc_surfaces[name] = openmc.model.RightCircularCylinder(center_base, height, radius, axis='z')
             elif surface_type == 'cylx':
                 if len(coefficients) == 3:
                     y0, z0, r = coefficients
-                    openmc_surfaces[surface_id] = openmc.XCylinder(y0, z0, r)
+                    openmc_surfaces[name] = openmc.XCylinder(y0, z0, r)
                 elif len(coefficients) == 5:
                     y0, z0, r, x0, x1 = coefficients
                     center_base = (x0, y0, z0)
                     height = x1 - x0
                     radius = r
-                    openmc_surfaces[surface_id] = openmc.model.RightCircularCylinder(center_base, height, radius, axis='x')
+                    openmc_surfaces[name] = openmc.model.RightCircularCylinder(center_base, height, radius, axis='x')
             elif surface_type == 'cyly':
                 if len(coefficients) == 3:
                     x0, z0, r = coefficients
-                    openmc_surfaces[surface_id] = openmc.YCylinder(x0, z0, r)
+                    openmc_surfaces[name] = openmc.YCylinder(x0, z0, r)
                 elif len(coefficients) == 5:
                     x0, z0, r, y0, y1 = coefficients
                     center_base = (x0, y0, z0)
                     height = y1 - y0
                     radius = r
-                    openmc_surfaces[surface_id] = openmc.model.RightCircularCylinder(center_base, height, radius, axis='y')
+                    openmc_surfaces[name] = openmc.model.RightCircularCylinder(center_base, height, radius, axis='y')
             elif surface_type == 'sqc':
                 x0, y0, half_width = coefficients
-                openmc_surfaces[surface_id] = sqc(x0, y0, half_width)
+                openmc_surfaces[name] = sqc(x0, y0, half_width)
             elif surface_type == 'torx':
                 x0, y0, z0, A, B, C = coefficients
-                openmc_surfaces[surface_id] = openmc.XTorus(x0, y0, z0, A, B, C)
+                openmc_surfaces[name] = openmc.XTorus(x0, y0, z0, A, B, C)
             elif surface_type == 'tory':
                 x0, y0, z0, A, B, C = coefficients
-                openmc_surfaces[surface_id] = openmc.YTorus(x0, y0, z0, A, B, C)
+                openmc_surfaces[name] = openmc.YTorus(x0, y0, z0, A, B, C)
             elif surface_type == 'torz':
                 x0, y0, z0, A, B, C = coefficients
-                openmc_surfaces[surface_id] = openmc.ZTorus(x0, y0, z0, A, B, C)
+                openmc_surfaces[name] = openmc.ZTorus(x0, y0, z0, A, B, C)
             elif surface_type == 'sph':
                 x0, y0, z0, r = coefficients
-                openmc_surfaces[surface_id] = openmc.Sphere(x0, y0, z0, r)
+                openmc_surfaces[name] = openmc.Sphere(x0, y0, z0, r)
             elif surface_type == 'plane':
                 A, B, C, D = coefficients
-                openmc_surfaces[surface_id] = openmc.Plane(A, B, C, D)
+                openmc_surfaces[name] = openmc.Plane(A, B, C, D)
             elif surface_type == 'cone':
                 x0, y0, z0, r, h = coefficients
                 R = coefficients[3]/coefficients[4]
                 Z0 = coefficients[4] + coefficients[2]
                 up = (h < 0)
-                openmc_surfaces[surface_id] = openmc.model.ZConeOneSided(x0, y0, Z0, R, up)
+                openmc_surfaces[name] = openmc.model.ZConeOneSided(x0, y0, Z0, R, up)
             elif surface_type == 'hexxc':
                 x0, y0, d = coefficients
-                openmc_surfaces[surface_id] = hexxc(x0, y0, d)
+                openmc_surfaces[name] = hexxc(x0, y0, d)
             elif surface_type == 'hexyc':
                 x0, y0, d = coefficients
-                openmc_surfaces[surface_id] = hexyc(x0, y0, d)
+                openmc_surfaces[name] = hexyc(x0, y0, d)
             else:
                 raise ValueError(f"Surface type '{surface_type}' not yet supported.")
 
