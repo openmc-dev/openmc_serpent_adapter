@@ -181,15 +181,19 @@ def parse_therm_cards(lines: List[str]) -> Dict[str, str]:
 
 
 def parse_mat_mix_cards(lines: List[str], therm_materials: Dict[str, str]) -> Dict[str, openmc.Material]:
+    """Parse 'mat' and 'mix' cards"""
+
+    # TODO: Fix material ID assignment to match Serpent
+
     openmc_materials = {}
     for line in lines:
         words = line.split()
         keyword = first_word(words)
 
         if keyword == 'mat':
-            mat_id = words[1]
+            name = words[1]
             density = words[2]
-            openmc_materials[mat_id] = mat = openmc.Material()
+            openmc_materials[name] = mat = openmc.Material(name=name)
             if density != 'sum':
                 density = float(density)
                 if density < 0:
