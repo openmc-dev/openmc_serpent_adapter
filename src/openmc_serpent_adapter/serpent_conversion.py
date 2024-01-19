@@ -431,8 +431,8 @@ def main():
         if first_word(words) != 'cell':
             continue
 
-        # Creating an outside universe for the lattice outside
-        openmc_universes['outside'] = openmc.Universe()
+        # TODO: Remove
+        openmc.Universe()
 
         # Read ID, universe, material and coefficients
         cell_id = words[1]
@@ -442,13 +442,9 @@ def main():
         if words[3] == 'fill':
             coefficients = words[5:]
             openmc_cells[cell_id] = openmc.Cell()
-        elif words[3] == 'void':
+        elif words[3] in ('void', 'outside'):
             openmc_cells[cell_id] = openmc.Cell()
             coefficients = words[4:]
-        elif words[3] == 'outside':
-            openmc_cells[cell_id] = openmc.Cell()
-            coefficients = words[4:]
-            openmc_universes['outside'].add_cell(openmc_cells[cell_id])
         else:
             cell_material = openmc_materials[words[3]]
             coefficients = words[4:]
@@ -593,9 +589,6 @@ def main():
                 raise ValueError('Lattice geometry: 3D y-type hexagonal prism lattice is not supported!')
             elif lattice_type == '14':
                 raise ValueError('Lattice geometry: x-type triangular lattice is not defined supported!')
-
-            # !!!!!!Think about it again!!!!!!!!! Does it work if we have multiple lattice geometries
-            # openmc_lattices[lattice_id].outer = openmc_universes['outside']
 
         if words[0] in ('surf', 'cell', 'mat', 'lat', 'set', 'include', 'plot', 'therm', 'dep'):
             ctrl = words[0]
