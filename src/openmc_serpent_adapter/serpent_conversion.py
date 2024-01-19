@@ -180,32 +180,9 @@ def parse_therm_cards(lines: List[str]) -> Dict[str, str]:
     return therm_materials
 
 
-def main():
-    openmc_surfaces  = {}
-    openmc_cells     = {}
-    openmc_universes = {}
+def parse_mat_mix_cards(lines: List[str], therm_materials: Dict[str, str]) -> Dict[str, openmc.Material]:
     openmc_materials = {}
-    openmc_lattices  = {}
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument('input_file', type=Path)
-    args = parser.parse_args()
-
-    # Read lines from input file
-    with args.input_file.open('r') as fh:
-        all_lines = fh.readlines()
-
-    # Preprocessing steps: replace 'include' cards, remove comments and empty
-    # lines, join cards over multiple lines
-    all_lines = expand_include_cards(all_lines)
-    all_lines = remove_comments(all_lines)
-    all_lines = join_lines(all_lines, {'therm', 'mat', 'mix'})
-
-    # Read thermal scattering cards
-    therm_materials = parse_therm_cards(all_lines)
-
-    # Materials
-    for line in all_lines:
+    for line in lines:
         words = line.split()
         keyword = first_word(words)
 
@@ -273,6 +250,35 @@ def main():
             mix_per = [float(percent)/100 for percent in words[3::2]]
             openmc_materials[mat_id] = openmc.Material.mix_materials(
                 mix, mix_per, 'vo' if mix_per[0] > 0 else 'wo')
+
+    return openmc_materials
+
+
+def main():
+    openmc_surfaces  = {}
+    openmc_cells     = {}
+    openmc_universes = {}
+    openmc_lattices  = {}
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('input_file', type=Path)
+    args = parser.parse_args()
+
+    # Read lines from input file
+    with args.input_file.open('r') as fh:
+        all_lines = fh.readlines()
+
+    # Preprocessing steps: replace 'include' cards, remove comments and empty
+    # lines, join cards over multiple lines
+    all_lines = expand_include_cards(all_lines)
+    all_lines = remove_comments(all_lines)
+    all_lines = join_lines(all_lines, {'therm', 'mat', 'mix'})
+
+    # Read thermal scattering cards
+    therm_materials = parse_therm_cards(all_lines)
+
+    # Read material and mixture cards
+    openmc_materials = parse_mat_mix_cards(all_lines, therm_materials)
 
     #-----------------------------------------------------------------------------
     # Conversion of a SERPENT surface to an OpenMC surface
