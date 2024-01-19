@@ -63,9 +63,17 @@ INPUT_KEYWORDS = [
     'wwin'
 ]
 
-MATERIAL_KEYWORDS = [
-    'tmp', 'tms', 'tft', 'rgb', 'vol', 'mass', 'burn', 'fix', 'moder'
-]
+MATERIAL_KEYWORD_PARAMS = {
+    'tmp': 2,
+    'tms': 2,
+    'tft': 3,
+    'rgb': 4,
+    'vol': 2,
+    'mass': 2,
+    'burn': 2,
+    'fix': 3,
+    'moder': 3
+}
 
 
 #---------------------------------------------------------------------
@@ -191,102 +199,84 @@ def main():
     # lines, join cards over multiple lines
     all_lines = expand_include_cards(all_lines)
     all_lines = remove_comments(all_lines)
-    all_lines = join_lines(all_lines, {'therm'})
+    all_lines = join_lines(all_lines, {'therm', 'mat', 'mix'})
 
-    # Read therma
+    # Read thermal scattering cards
     therm_materials = parse_therm_cards(all_lines)
 
     # Materials
-    ctrl = 'ctrl'
     for line in all_lines:
         words = line.split()
+        keyword = first_word(words)
 
-        if words[0] in ('surf', 'cell', 'lat', 'set', 'include', 'plot', 'therm', 'dep', 'pin'):
-            ctrl = words[0]
-
-        if words[0] == 'mat':
-            control = 'mat'
-        elif words[0] in ('lat', 'surf', 'cell', 'mix', 'set'):
-            control = 0
-
-        # Material cards
-        if words[0] == 'mat':
-            mat_id                      = words[1]
-            openmc_materials[mat_id]    = openmc.Material()
-            if words[2] != 'sum':
-                if words[2][0] == '-':
-                    words[2] = words[2][1:]
-                    openmc_materials[mat_id].set_density('g/cm3', float(words[2]))
+        if keyword == 'mat':
+            mat_id = words[1]
+            density = words[2]
+            openmc_materials[mat_id] = mat = openmc.Material()
+            if density != 'sum':
+                density = float(density)
+                if density < 0:
+                    mat.set_density('g/cm3', abs(density))
                 else:
-                    openmc_materials[mat_id].set_density('atom/b-cm', float(words[2]))
-            for x in range(len(words)):
-                if words[x] == 'tmp':
-                    mat_temp                             = float(words[x+1])
-                    openmc_materials[mat_id].temperature = float(mat_temp)
-                # OpenMC does not support thermal scattering tables in mixing materials
-                # For the future and the general use of conversion file, it needs to be fixed in the source code!!!!
-                elif words[x] == 'moder':
-                    openmc_materials[mat_id].add_s_alpha_beta(str(therm_materials[str(words[x+1])]))
-            mix     = []
-            mix_per = []
-        # Mixture cards
-        elif words[0] == 'mix':
-            mat_id                      = words[1]
-            openmc_materials[mat_id]    = openmc.Material()
-            mix     = []
-            mix_per = []
+                    mat.set_density('atom/b-cm', density)
 
-        elif words[0] in openmc_materials and ctrl == 'mix':
-            mix_id      = words[0]
-            mix_percent = float(words[1])/100
-            percent     = f'{mix_percent:.3f}'
-            mix.append(openmc_materials[mix_id])
-            mix_per.append(float(percent))
-            if mix_percent > 0:
-                openmc_materials[mat_id]    = openmc.Material.mix_materials(mix, mix_per, 'vo')
-            else:
-                openmc_materials[mat_id]    = openmc.Material.mix_materials(mix, mix_per, 'wo')
-        # Adding materials to the material card
-        elif words[0] not in ('mix', 'pin', 'mat', 'therm', 'cell', 'surf', 'set', 'lat') and words[0] not in openmc_materials and control == 'mat':
-            nuclide = words[0]
-            percent = float(words[1])
-            if '.' in nuclide:
-                zaid, xs = nuclide.split('.')
-                if '-' in zaid:
-                    element, A = zaid.split('-')
-                    if 'm' in A[-1]:
-                        A = A.translate( { ord("m"): None } )
-                        zaid = zaid[:-1]
-                        print(f'Warning! "m" is ignored for {nuclide}')
-                    A = int(A)
-                    name = zaid.translate( { ord("-"): None } )
+            # Read through keywords on mat card
+            index = 3
+            while True:
+                mat_keyword = words[index].lower()
+                if mat_keyword in MATERIAL_KEYWORD_PARAMS:
+                    if mat_keyword == 'tmp':
+                        mat.temperature = float(words[index + 1])
+                    elif mat_keyword == 'moder':
+                        mat.add_s_alpha_beta(therm_materials[words[index + 1]])
+                    # TODO: Handle other keywords
+                    index += MATERIAL_KEYWORD_PARAMS[mat_keyword]
                 else:
-                    name, element, Z, A, metastable = get_metadata(int(zaid))
-            else:
-                if '-' in zaid:
-                    element, A = zaid.split('-')
-                    if 'm' in A[-1]:
-                        A = A.translate( { ord("m"): None } )
-                        zaid = zaid[:-1]
-                        print(f'Warning! "m" is ignored for {nuclide}')
-                    A = int(A)
-                    name = zaid.translate( { ord("-"): None } )
+                    break
+
+            # Read nuclides and fractions
+            for nuclide, percent in zip(words[index::2], words[index+1::2]):
+                percent = float(percent)
+                if '.' in nuclide:
+                    zaid, xs = nuclide.split('.')
+                    if '-' in zaid:
+                        element, A = zaid.split('-')
+                        if 'm' in A[-1]:
+                            A = A.translate( { ord("m"): None } )
+                            zaid = zaid[:-1]
+                            print(f'Warning! "m" is ignored for {nuclide}')
+                        A = int(A)
+                        name = zaid.translate( { ord("-"): None } )
+                    else:
+                        name, element, Z, A, metastable = get_metadata(int(zaid))
                 else:
-                    zaid = nuclide
-                    name, element, Z, A, metastable = get_metadata(int(zaid))
-            if percent < 0:
+                    if '-' in zaid:
+                        element, A = zaid.split('-')
+                        if 'm' in A[-1]:
+                            A = A.translate( { ord("m"): None } )
+                            zaid = zaid[:-1]
+                            print(f'Warning! "m" is ignored for {nuclide}')
+                        A = int(A)
+                        name = zaid.translate( { ord("-"): None } )
+                    else:
+                        zaid = nuclide
+                        name, element, Z, A, metastable = get_metadata(int(zaid))
                 if A > 0:
-                    openmc_materials[mat_id].add_nuclide(name, abs(percent), 'wo')
+                    mat.add_nuclide(name, abs(percent), 'wo' if percent < 0 else 'ao')
                 else:
-                    openmc_materials[mat_id].add_element(element, abs(percent), 'wo')
-            else:
-                if A > 0:
-                    openmc_materials[mat_id].add_nuclide(name, abs(percent), 'ao')
-                else:
-                    openmc_materials[mat_id].add_element(element, abs(percent), 'ao')
+                    mat.add_element(element, abs(percent), 'wo' if percent < 0 else 'ao')
+
+        elif keyword == 'mix':
+            mat_id = words[1]
+            # TODO: Account for rgb, vol, mass keywords
+            mix = [openmc_materials[mix_id] for mix_id in words[2::2]]
+            mix_per = [float(percent)/100 for percent in words[3::2]]
+            openmc_materials[mat_id] = openmc.Material.mix_materials(
+                mix, mix_per, 'vo' if mix_per[0] > 0 else 'wo')
 
     #-----------------------------------------------------------------------------
     # Conversion of a SERPENT surface to an OpenMC surface
+    ctrl = 'ctrl'
     for line in all_lines:
         words = line.split()
         if words[0] == 'set' and words[1] == 'bc':
