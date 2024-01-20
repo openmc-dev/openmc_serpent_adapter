@@ -427,79 +427,6 @@ def main():
             openmc_universes[name] = openmc.Universe()
         return openmc_universes[name]
 
-    #--------------------------------------------------------------------------------
-    #Conversion of a SERPENT cell and universe to a OpenMC cell and universe
-    outer_surfaces = []
-    inner_surfaces = []
-    for line in all_lines:
-        words = line.split()
-        if first_word(words) != 'cell':
-            continue
-
-        # Read ID, universe, material and coefficients
-        name = words[1]
-        openmc_cells[name] = cell = openmc.Cell(name=name)
-
-        universe_name = words[2]
-        get_universe(universe_name).add_cell(cell)
-
-        if words[3] == 'fill':
-            # Since we don't know whether the fill is a universe or a lattice,
-            # we defer setting the cell fill until after lattices have been
-            # created
-            coefficients = words[5:]
-        elif words[3] in ('void', 'outside'):
-            coefficients = words[4:]
-        else:
-            cell.fill = openmc_materials[words[3]]
-            coefficients = words[4:]
-
-        # TODO: Should we keep this fixup?
-        for x in range(len(coefficients)-1, 0, -1):
-            if coefficients[x] == '-':
-                coefficients[x+1] = f'-{coefficients[x+1]}'
-                del coefficients[x]
-
-        # Creating regions
-        coefficient = ' '.join(coefficients)
-        for name, surface_id in sorted(name_to_id.items(), key=lambda x: len(x[0]), reverse=True):
-            coefficient = coefficient.replace(name, str(surface_id))
-        try:
-            cell.region = openmc.Region.from_expression(expression=coefficient, surfaces=openmc_surfaces)
-        except Exception:
-            raise ValueError(f'Failed to convert cell definition: {line}')
-
-        # Outer boundary conditions
-        coefficients = coefficient.split()
-        if words[3] != 'outside':
-            for coefficient in coefficients:
-                if coefficient not in inner_surfaces:
-                    inner_surfaces.append(coefficient)
-        if words[3] == 'outside':
-            for coefficient in coefficients:
-                if coefficient not in outer_surfaces:
-                    outer_surfaces.append(coefficient)
-            for surface in outer_surfaces:
-                for name in inner_surfaces:
-                    if surface == name:
-                        outer_surfaces.remove(surface)
-
-    boundary = options['bc'][0] if 'bc' in options else None
-    for surface in outer_surfaces:
-        if '-' in surface:
-            surface = surface[1:]
-        # TODO: Handle all variations of 'set bc'
-        if boundary == '1':
-            boundary = 'vacuum'
-        elif boundary == '2':
-            boundary = 'reflective'
-        elif boundary == '3':
-            boundary = 'periodic'
-        openmc_surfaces[int(surface)].boundary_type = boundary
-
-    # Read pin geometry definitions
-    parse_pin_cards(all_lines, openmc_materials, openmc_universes)
-
     # NOTE: If there is only one material and no surface, this code does not work. Needs to be fixed
     #---------------------------------------------------------------------------------------------------------------------------
     #Conversion of a SERPENT lattice to a OpenMC lattice
@@ -645,22 +572,84 @@ def main():
         for r in range(len(rings)):
             openmc_lattices[lattice_id].universes = rings
 
-    #---------------------------------------------------------------------------------------------------------------------------
-    # Assign fills to all cells now that lattices have been created
+    # Read pin geometry definitions
+    parse_pin_cards(all_lines, openmc_materials, openmc_universes)
+
+    #--------------------------------------------------------------------------------
+    #Conversion of a SERPENT cell and universe to a OpenMC cell and universe
+    outer_surfaces = []
+    inner_surfaces = []
     for line in all_lines:
         words = line.split()
-        if first_word(words) == 'cell':
-            # Read ID, universe, material and coefficients
-            name = words[1]
-            cell = openmc_cells[name]
-            if words[3] == 'fill':
-                univ_name = words[4]
-                if univ_name in openmc_universes:
-                    cell.fill = openmc_universes[univ_name]
-                elif words[4] in openmc_lattices:
-                    cell.fill = openmc_lattices[univ_name]
-                else:
-                    raise ValueError(f"Cell '{name}' is filled with non-existent universe '{univ_name}'")
+        if first_word(words) != 'cell':
+            continue
+
+        # Read ID, universe, material and coefficients
+        name = words[1]
+        openmc_cells[name] = cell = openmc.Cell(name=name)
+
+        universe_name = words[2]
+        get_universe(universe_name).add_cell(cell)
+
+        if words[3] == 'fill':
+            # Assign universe/lattice fill to cell
+            univ_name = words[4]
+            if univ_name in openmc_universes:
+                cell.fill = openmc_universes[univ_name]
+            elif words[4] in openmc_lattices:
+                cell.fill = openmc_lattices[univ_name]
+            else:
+                raise ValueError(f"Cell '{name}' is filled with non-existent universe '{univ_name}'")
+
+            coefficients = words[5:]
+        elif words[3] in ('void', 'outside'):
+            coefficients = words[4:]
+        else:
+            cell.fill = openmc_materials[words[3]]
+            coefficients = words[4:]
+
+        # TODO: Should we keep this fixup?
+        for x in range(len(coefficients)-1, 0, -1):
+            if coefficients[x] == '-':
+                coefficients[x+1] = f'-{coefficients[x+1]}'
+                del coefficients[x]
+
+        # Creating regions
+        coefficient = ' '.join(coefficients)
+        for name, surface_id in sorted(name_to_id.items(), key=lambda x: len(x[0]), reverse=True):
+            coefficient = coefficient.replace(name, str(surface_id))
+        try:
+            cell.region = openmc.Region.from_expression(expression=coefficient, surfaces=openmc_surfaces)
+        except Exception:
+            raise ValueError(f'Failed to convert cell definition: {line}')
+
+        # Outer boundary conditions
+        coefficients = coefficient.split()
+        if words[3] != 'outside':
+            for coefficient in coefficients:
+                if coefficient not in inner_surfaces:
+                    inner_surfaces.append(coefficient)
+        if words[3] == 'outside':
+            for coefficient in coefficients:
+                if coefficient not in outer_surfaces:
+                    outer_surfaces.append(coefficient)
+            for surface in outer_surfaces:
+                for name in inner_surfaces:
+                    if surface == name:
+                        outer_surfaces.remove(surface)
+
+    boundary = options['bc'][0] if 'bc' in options else None
+    for surface in outer_surfaces:
+        if '-' in surface:
+            surface = surface[1:]
+        # TODO: Handle all variations of 'set bc'
+        if boundary == '1':
+            boundary = 'vacuum'
+        elif boundary == '2':
+            boundary = 'reflective'
+        elif boundary == '3':
+            boundary = 'periodic'
+        openmc_surfaces[int(surface)].boundary_type = boundary
 
     #------------------------------------Settings-----------------------------------------------
 
