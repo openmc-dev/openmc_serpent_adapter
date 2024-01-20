@@ -436,23 +436,22 @@ def main():
         if first_word(words) != 'cell':
             continue
 
-        openmc.Universe()  # TODO: remove
-
         # Read ID, universe, material and coefficients
-        cell_id = words[1]
-        cell_universe = words[2]
-        if cell_universe not in openmc_universes:
-            # TODO: Assign universe ID
-            openmc_universes[cell_universe] = openmc.Universe()
+        name = words[1]
+        openmc_cells[name] = cell = openmc.Cell(name=name)
+
+        universe_name = words[2]
+        get_universe(universe_name).add_cell(cell)
 
         if words[3] == 'fill':
+            # Since we don't know whether the fill is a universe or a lattice,
+            # we defer setting the cell fill until after lattices have been
+            # created
             coefficients = words[5:]
-            openmc_cells[cell_id] = openmc.Cell()
         elif words[3] in ('void', 'outside'):
-            openmc.Cell()  # TODO: remove
             coefficients = words[4:]
         else:
-            cell_material = openmc_materials[words[3]]
+            cell.fill = openmc_materials[words[3]]
             coefficients = words[4:]
 
         # TODO: Should we keep this fixup?
@@ -466,7 +465,7 @@ def main():
         for name, surface_id in sorted(name_to_id.items(), key=lambda x: len(x[0]), reverse=True):
             coefficient = coefficient.replace(name, str(surface_id))
         try:
-            cell_region  = openmc.Region.from_expression(expression=coefficient, surfaces=openmc_surfaces)
+            cell.region = openmc.Region.from_expression(expression=coefficient, surfaces=openmc_surfaces)
         except Exception:
             raise ValueError(f'Failed to convert cell definition: {line}')
 
@@ -484,21 +483,6 @@ def main():
                 for name in inner_surfaces:
                     if surface == name:
                         outer_surfaces.remove(surface)
-
-        # Convert to OpenMC cell and add to dictionary
-        if words[3] == 'fill':
-            if words[4] in openmc_universes:
-                openmc_cells[cell_id] = openmc.Cell(fill=openmc_universes[words[4]], region=cell_region)
-            elif words[4] in openmc_lattices:
-                openmc_cells[cell_id] = openmc.Cell(fill=openmc_lattices[words[4]], region=cell_region)
-        elif words[3] in ('void', 'outside'):
-            openmc_cells[cell_id] = openmc.Cell(region=cell_region)
-        else:
-            openmc_cells[cell_id] = openmc.Cell(fill=cell_material, region=cell_region)
-
-        # Adding the cell to a universe
-        if words[3] != 'fill':
-            openmc_universes[cell_universe].add_cell(openmc_cells[cell_id])
 
     boundary = options['bc'][0] if 'bc' in options else None
     for surface in outer_surfaces:
@@ -662,32 +646,21 @@ def main():
             openmc_lattices[lattice_id].universes = rings
 
     #---------------------------------------------------------------------------------------------------------------------------
-    # Creating cells with 'fill' command
+    # Assign fills to all cells now that lattices have been created
     for line in all_lines:
         words = line.split()
-        if words[0] == 'cell':
+        if first_word(words) == 'cell':
             # Read ID, universe, material and coefficients
-            cell_id = words[1]
-            cell_universe = words[2]
+            name = words[1]
+            cell = openmc_cells[name]
             if words[3] == 'fill':
-                coefficients = words[5:]
-                for x in range(len(coefficients)-1, 0, -1):
-                    if coefficients[x] == '-':
-                        coefficients[x+1] = f'-{coefficients[x+1]}'
-                        del coefficients[x]
-                coefficients = ' '.join(coefficients)
-                for name, surface_id in sorted(name_to_id.items(), key=lambda x: len(x[0]), reverse=True):
-                    coefficients = coefficients.replace(name, str(surface_id))
-                try:
-                    cell_region  = openmc.Region.from_expression(expression = coefficients, surfaces = openmc_surfaces)
-                except Exception:
-                    raise ValueError(f'Failed to convert cell definition: {line}')
-                if words[4] in openmc_universes:
-                    openmc_cells[cell_id] = openmc.Cell(fill=openmc_universes[words[4]], region=cell_region)
-                    openmc_universes[cell_universe].add_cell(openmc_cells[cell_id])
+                univ_name = words[4]
+                if univ_name in openmc_universes:
+                    cell.fill = openmc_universes[univ_name]
                 elif words[4] in openmc_lattices:
-                    openmc_cells[cell_id] = openmc.Cell(fill=openmc_lattices[words[4]], region=cell_region)
-                    openmc_universes[cell_universe].add_cell(openmc_cells[cell_id])
+                    cell.fill = openmc_lattices[univ_name]
+                else:
+                    raise ValueError(f"Cell '{name}' is filled with non-existent universe '{univ_name}'")
 
     #------------------------------------Settings-----------------------------------------------
 
