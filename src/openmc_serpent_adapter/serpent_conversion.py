@@ -673,30 +673,29 @@ def main():
             cell_id = words[1]
             cell_universe = words[2]
             if words[3] == 'fill':
-                coefficients            = [str(x) for x in words[5:]]
+                coefficients = words[5:]
                 for x in range(len(coefficients)-1, 0, -1):
-                    if coefficients[x]=='-':
-                        coefficients[x+1]=(f'-{coefficients[x+1]}')
-                        del(coefficients[x])
+                    if coefficients[x] == '-':
+                        coefficients[x+1] = f'-{coefficients[x+1]}'
+                        del coefficients[x]
                 coefficients = ' '.join(coefficients)
                 for name, surface_id in sorted(name_to_id.items(), key=lambda x: len(x[0]), reverse=True):
                     coefficients = coefficients.replace(name, str(surface_id))
                 try:
                     cell_region  = openmc.Region.from_expression(expression = coefficients, surfaces = openmc_surfaces)
                 except Exception:
-                    print(f'Failed on line: {line}')
-                    raise
+                    raise ValueError(f'Failed to convert cell definition: {line}')
                 if words[4] in openmc_universes:
-                    openmc_cells[cell_id]        = openmc.Cell(fill=openmc_universes[words[4]], region=cell_region)
+                    openmc_cells[cell_id] = openmc.Cell(fill=openmc_universes[words[4]], region=cell_region)
                     openmc_universes[cell_universe].add_cell(openmc_cells[cell_id])
                 elif words[4] in openmc_lattices:
-                    openmc_cells[cell_id]        = openmc.Cell(fill=openmc_lattices[words[4]], region=cell_region)
+                    openmc_cells[cell_id] = openmc.Cell(fill=openmc_lattices[words[4]], region=cell_region)
                     openmc_universes[cell_universe].add_cell(openmc_cells[cell_id])
-
 
     #------------------------------------Settings-----------------------------------------------
 
     model = openmc.Model()
+    # TODO: Check for 'set root'
     model.geometry = openmc.Geometry(openmc_universes['0'])
     model.materials = openmc.Materials(openmc_materials.values())
 
