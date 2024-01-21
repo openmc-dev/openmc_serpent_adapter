@@ -159,6 +159,17 @@ def join_lines(lines: List[str], cards: Set[str]) -> List[str]:
         index += 1
 
 
+def _get_max_numeric_id(lines: List[str], keywords: Set[str], position: int = 1) -> int:
+    max_id = -1
+    for line in lines:
+        words = line.split()
+        if first_word(words) in keywords:
+            name = words[position]
+            if name.isnumeric():
+                max_id = max(max_id, int(name))
+    return max_id
+
+
 def parse_therm_cards(lines: List[str]) -> Dict[str, str]:
     """Parse 'therm' cards"""
     therm_materials  = {}
@@ -183,7 +194,8 @@ def parse_therm_cards(lines: List[str]) -> Dict[str, str]:
 def parse_mat_mix_cards(lines: List[str], therm_materials: Dict[str, str]) -> Dict[str, openmc.Material]:
     """Parse 'mat' and 'mix' cards"""
 
-    # TODO: Fix material ID assignment to match Serpent
+    # Avoid clasing with numeric IDs from Serpent
+    openmc.Material.next_id = _get_max_numeric_id(lines, {'mat', 'mix'}) + 1
 
     openmc_materials = {}
     for line in lines:
@@ -192,8 +204,10 @@ def parse_mat_mix_cards(lines: List[str], therm_materials: Dict[str, str]) -> Di
 
         if keyword == 'mat':
             name = words[1]
+            material_id = int(name) if name.isnumeric() else None
             density = words[2]
-            openmc_materials[name] = mat = openmc.Material(name=name)
+            openmc_materials[name] = mat = openmc.Material(
+                name=name, material_id=material_id)
             if density != 'sum':
                 density = float(density)
                 if density < 0:
@@ -248,12 +262,14 @@ def parse_mat_mix_cards(lines: List[str], therm_materials: Dict[str, str]) -> Di
                     mat.add_element(element, abs(percent), 'wo' if percent < 0 else 'ao')
 
         elif keyword == 'mix':
-            mat_id = words[1]
+            name = words[1]
             # TODO: Account for rgb, vol, mass keywords
             mix = [openmc_materials[mix_id] for mix_id in words[2::2]]
             mix_per = [float(percent)/100 for percent in words[3::2]]
-            openmc_materials[mat_id] = openmc.Material.mix_materials(
+            openmc_materials[name] = openmc.Material.mix_materials(
                 mix, mix_per, 'vo' if mix_per[0] > 0 else 'wo')
+            if name.isnumeric():
+                openmc_materials[name].id = int(name)
 
     return openmc_materials
 
@@ -270,25 +286,31 @@ def parse_set_cards(lines: List[str]) -> Dict[str, List[str]]:
 
 def parse_surf_cards(lines: List[str]) -> Dict[str, openmc.Surface]:
     """Parse 'surf' cards"""
+
+    # Avoid clasing with numeric IDs from Serpent
+    openmc.Surface.next_id = _get_max_numeric_id(lines, {'surf'}) + 1
+
     openmc_surfaces = {}
     for line in lines:
         words = line.split()
         if first_word(words) == 'surf':
             # Read ID, surface type and coefficients
             _, name, surface_type, *coefficients = words
+            uid = int(name) if name.isnumeric() else None
             coefficients = [float(x) for x in coefficients]
+            kwargs = {'name': name, 'surface_id': uid}
 
             # Convert to OpenMC surface and add to dictionary
             if surface_type == 'px':
-                openmc_surfaces[name] = openmc.XPlane(coefficients[0])
+                openmc_surfaces[name] = openmc.XPlane(coefficients[0], **kwargs)
             elif surface_type == 'py':
-                openmc_surfaces[name] = openmc.YPlane(coefficients[0])
+                openmc_surfaces[name] = openmc.YPlane(coefficients[0], **kwargs)
             elif surface_type == 'pz':
-                openmc_surfaces[name] = openmc.ZPlane(coefficients[0])
+                openmc_surfaces[name] = openmc.ZPlane(coefficients[0], **kwargs)
             elif surface_type in ('cyl', 'cylz'):
                 if len(coefficients) == 3:
                     x0, y0, r = coefficients
-                    openmc_surfaces[name] = openmc.ZCylinder(x0, y0, r)
+                    openmc_surfaces[name] = openmc.ZCylinder(x0, y0, r, **kwargs)
                 elif len(coefficients) == 5:
                     x0, y0, r, z0, z1 = coefficients
                     center_base = (x0, y0, z0)
@@ -298,7 +320,7 @@ def parse_surf_cards(lines: List[str]) -> Dict[str, openmc.Surface]:
             elif surface_type == 'cylx':
                 if len(coefficients) == 3:
                     y0, z0, r = coefficients
-                    openmc_surfaces[name] = openmc.XCylinder(y0, z0, r)
+                    openmc_surfaces[name] = openmc.XCylinder(y0, z0, r, **kwargs)
                 elif len(coefficients) == 5:
                     y0, z0, r, x0, x1 = coefficients
                     center_base = (x0, y0, z0)
@@ -308,7 +330,7 @@ def parse_surf_cards(lines: List[str]) -> Dict[str, openmc.Surface]:
             elif surface_type == 'cyly':
                 if len(coefficients) == 3:
                     x0, z0, r = coefficients
-                    openmc_surfaces[name] = openmc.YCylinder(x0, z0, r)
+                    openmc_surfaces[name] = openmc.YCylinder(x0, z0, r, **kwargs)
                 elif len(coefficients) == 5:
                     x0, z0, r, y0, y1 = coefficients
                     center_base = (x0, y0, z0)
@@ -320,19 +342,19 @@ def parse_surf_cards(lines: List[str]) -> Dict[str, openmc.Surface]:
                 openmc_surfaces[name] = sqc(x0, y0, half_width)
             elif surface_type == 'torx':
                 x0, y0, z0, A, B, C = coefficients
-                openmc_surfaces[name] = openmc.XTorus(x0, y0, z0, A, B, C)
+                openmc_surfaces[name] = openmc.XTorus(x0, y0, z0, A, B, C, **kwargs)
             elif surface_type == 'tory':
                 x0, y0, z0, A, B, C = coefficients
-                openmc_surfaces[name] = openmc.YTorus(x0, y0, z0, A, B, C)
+                openmc_surfaces[name] = openmc.YTorus(x0, y0, z0, A, B, C, **kwargs)
             elif surface_type == 'torz':
                 x0, y0, z0, A, B, C = coefficients
-                openmc_surfaces[name] = openmc.ZTorus(x0, y0, z0, A, B, C)
+                openmc_surfaces[name] = openmc.ZTorus(x0, y0, z0, A, B, C, **kwargs)
             elif surface_type == 'sph':
                 x0, y0, z0, r = coefficients
-                openmc_surfaces[name] = openmc.Sphere(x0, y0, z0, r)
+                openmc_surfaces[name] = openmc.Sphere(x0, y0, z0, r, **kwargs)
             elif surface_type == 'plane':
                 A, B, C, D = coefficients
-                openmc_surfaces[name] = openmc.Plane(A, B, C, D)
+                openmc_surfaces[name] = openmc.Plane(A, B, C, D, **kwargs)
             elif surface_type == 'cone':
                 x0, y0, z0, r, h = coefficients
                 R = coefficients[3]/coefficients[4]
