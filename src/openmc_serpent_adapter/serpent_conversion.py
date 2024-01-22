@@ -387,13 +387,13 @@ def parse_lat_cards(lines: List[str], openmc_universes: Dict[str, universe_fill]
             universes.shape = (ny, nx)
 
             if lattice_type == 1:
-                lattice = openmc.RectLattice()
+                lattice = openmc.RectLattice(name=universe_name)
                 lattice.lower_left = (-(nx/2)*pitch, -(ny/2)*pitch)
                 lattice.pitch = (pitch, pitch)
                 # Set universes and reverse the y direction
                 lattice.universes = universes[::-1]
             elif lattice_type in (2, 3):
-                lattice = openmc.HexLattice()
+                lattice = openmc.HexLattice(name=universe_name)
                 lattice.orientation = 'x' if lattice_type == 2 else 'y'
                 lattice.center = (x0, y0)
                 lattice.pitch = [pitch]
@@ -412,13 +412,13 @@ def parse_lat_cards(lines: List[str], openmc_universes: Dict[str, universe_fill]
             universe = get_universe(words[6])
 
             if lattice_type == 6:
-                lattice = openmc.RectLattice()
+                lattice = openmc.RectLattice(name=universe_name)
                 lattice.lower_left = (-(x0 + pitch/2), -(y0 + pitch/2))
                 lattice.pitch = (pitch, pitch)
                 lattice.universes = [[universe]]
                 lattice.outer = universe
             elif lattice_type in (7, 8):
-                lattice = openmc.HexLattice()
+                lattice = openmc.HexLattice(name=universe_name)
                 lattice.orientation = 'x' if lattice_type == 7 else 'y'
                 lattice.center = (x0, y0)
                 lattice.pitch = [pitch]
