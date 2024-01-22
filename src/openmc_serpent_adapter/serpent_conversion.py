@@ -360,149 +360,91 @@ def parse_lat_cards(lines: List[str], openmc_universes: Dict[str, openmc.Univers
         return openmc_universes[name]
 
     # NOTE: If there is only one material and no surface, this code does not work. Needs to be fixed
-    #---------------------------------------------------------------------------------------------------------------------------
-    #Conversion of a SERPENT lattice to a OpenMC lattice
-    lattice_type = ''
-    number_of_rings = 0
     openmc_lattices = {}
     for line in lines:
         words = line.split()
 
-        if words[0] == 'lat':
-            z0 = []
-            uni = []
-            lattice_id   = words[1]
-            lattice_type = words[2]
-            if lattice_type == '1':
-                openmc_lattices[lattice_id] = openmc.RectLattice()
-                x0, y0 = words[3:5]
-                nx, ny = words[5:7]
-                pitch = float(words[7])
-                openmc_lattices[lattice_id].lower_left = (-(float(nx)/2)*pitch, -(float(ny)/2)*pitch)
-                openmc_lattices[lattice_id].pitch = (pitch, pitch)
-            elif lattice_type == '2':
-                x0, y0 = words[3:5]
-                nx, ny = words[5:7]
-                pitch = float(words[7])
-                number_of_rings = int((float(nx)+1)/2)
-                openmc_lattices[lattice_id] = openmc.HexLattice()
-                openmc_lattices[lattice_id].orientation = 'x'
-                openmc_lattices[lattice_id].center = float(x0), float(y0)
-                openmc_lattices[lattice_id].pitch = [pitch]
-            elif lattice_type == '3':
-                x0, y0 = words[3:5]
-                nx, ny = words[5:7]
-                pitch = float(words[7])
-                number_of_rings = (float(nx)+1)/2
-                openmc_lattices[lattice_id] = openmc.HexLattice(number_of_rings)
-                openmc_lattices[lattice_id].orientation = 'y'
-                openmc_lattices[lattice_id].lower_left = (-(float(nx)/2)*pitch, -(float(ny)/2)*pitch)
-                openmc_lattices[lattice_id].pitch = [pitch]
-            elif lattice_type == '6':
-                openmc_lattices[lattice_id] = openmc.RectLattice()
-                x0, y0 = words[3:5]
-                pitch = float(words[5])
-                openmc_lattices[lattice_id].lower_left = (-(float(x0)+(pitch/2)), -(float(y0)+(pitch/2)))
-                openmc_lattices[lattice_id].pitch = (pitch, pitch)
-            elif lattice_type == '7':
-                openmc_lattices[lattice_id] = openmc.HexLattice()
-                openmc_lattices[lattice_id].orientation = 'x'
-                x0, y0                                  = words[3:5]
-                pitch                                   = float(words[5])
-                openmc_lattices[lattice_id].lower_left  = (-(float(x0)+(pitch/2)), -(float(y0)+(pitch/2)))
-                openmc_lattices[lattice_id].pitch       = [pitch]
-            elif lattice_type == '8':
-                openmc_lattices[lattice_id] = openmc.HexLattice()
-                openmc_lattices[lattice_id].orientation = 'y'
-                x0, y0 = words[3:5]
-                pitch = float(words[5])
-                openmc_lattices[lattice_id].lower_left = (-(float(x0)+(pitch/2)), -(float(y0)+(pitch/2)))
-                openmc_lattices[lattice_id].pitch = [pitch]
-            elif lattice_type == '9':
-                x0, y0 = words[3:5]
-                x0, y0 = float(x0), float(y0)
-                n = float(words[5])
-            # Missing circular cluster array (4), 3D cuboidal lattice (11), x-type triangular lattice (14)
-            # 3D x-type hexagonal prism lattice (12), and 3D y-type hexagonal prism lattice (13)
-            elif lattice_type == '4':
-                raise ValueError('Lattice geometry: circular cluster array is not supported!')
-            elif lattice_type == '11':
-                raise ValueError('Lattice geometry: 3D cuboidal lattice is not supported!')
-            elif lattice_type == '12':
-                raise ValueError('Lattice geometry: 3D x-type hexagonal prism lattice is not supported!')
-            elif lattice_type == '13':
-                raise ValueError('Lattice geometry: 3D y-type hexagonal prism lattice is not supported!')
-            elif lattice_type == '14':
-                raise ValueError('Lattice geometry: x-type triangular lattice is not defined supported!')
+        if words[0] != 'lat':
+            continue
 
-        if words[0] in ('surf', 'cell', 'mat', 'lat', 'set', 'include', 'plot', 'therm', 'dep'):
-            ctrl = words[0]
+        universe_name = words[1]
+        lattice_type = int(words[2])
+        if lattice_type in (1, 2, 3, 14):
+            # Case I
+            x0 = float(words[3])
+            y0 = float(words[4])
+            nx = int(words[5])
+            ny = int(words[6])
+            pitch = float(words[7])
 
-        if words[0] not in ('surf', 'cell', 'lat', 'plot', 'set') and lattice_type == '9':
-            z0.append(float(words[0]))
-            uni.append(get_universe(words[1]))
-            openmc_lattices[lattice_id] = vertical_stack(z0, uni, x0, y0)
-        elif words[0] not in ('surf', 'mat', 'cell', 'lat', 'set', 'include', 'plot', 'therm', 'pin', 'dep') and ctrl != 'mat' and ctrl != 'dep' and lattice_type !='9':
-            if lattice_type == '6' or lattice_type == '1':
-                universes = [get_universe(name) for name in words]
-                uni.append(universes)
-                lattice = openmc_lattices[lattice_id]
-                lattice.universes = list(reversed(uni))
-            elif lattice_type == '2':
-                uni.append(words)
-                if len(uni) == int(nx):
-                    for n in range(int(nx)):
-                        if n < number_of_rings:
-                            uni[n] = uni[n][-(number_of_rings+n):]
-                        elif n >= number_of_rings:
-                            uni[n] = uni[n][:(number_of_rings-(n+1))]
+            # Put universes into an array
+            uni = words[8:]
+            universes = np.array([get_universe(name) for name in uni])
+            universes.shape = (ny, nx)
 
-    # !!!!!This is NOT going to work with the multiple lattices in one geometry
-    # Conversion of hexagonal lattice geometry
-    if number_of_rings != 0:
-        rings = []
-        ctrl = number_of_rings
-        nx = int(nx)
-        for r in range(number_of_rings):
-            ring = []
-            x = 0
-            y = 0
-            for item in range(int((nx-1)*3)):
-                # starting point
-                if item == 0:
-                    a, b = number_of_rings-1, nx-1
-                    ring.append(uni[a][b])
-                # till first corner
-                elif item <= ctrl-1:
-                    x, y = x+1, y-1
-                    a, b = number_of_rings-1+x, nx-1+y
-                    ring.append(uni[a][b])
-                # till second corner
-                elif item > ctrl-1 and item <= 2*(ctrl-1):
-                    y = y-1
-                    a, b = number_of_rings-1+x, nx-1+y
-                    ring.append(uni[a][b])
-                # till third and fourth corners
-                elif item > 2*(ctrl-1) and item <= 4*(ctrl-1):
-                    x = x-1
-                    a, b = number_of_rings-1+x, nx-1+y
-                    ring.append(uni[a][b])
-                # till fifth corner
-                elif item > 4*(ctrl-1) and item <= 5*(ctrl-1):
-                    y = y+1
-                    a, b = number_of_rings-1+x, nx-1+y
-                    ring.append(uni[a][b])
-                # after fifth corner
-                elif item > 5*(ctrl-1)and item < 6*(ctrl-1):
-                    x, y = x+1, y+1
-                    a, b = number_of_rings-1+x, nx-1+y
-                    ring.append(uni[a][b])
-            rings.append([get_universe(name) for name in ring])
-            name = f'{r+1}.ring'
-            ctrl = ctrl - 1
-            nx = nx - 1
-        for r in range(len(rings)):
-            openmc_lattices[lattice_id].universes = rings
+            if lattice_type == 1:
+                openmc_lattices[universe_name] = lattice = openmc.RectLattice()
+                lattice.lower_left = (-(nx/2)*pitch, -(ny/2)*pitch)
+                lattice.pitch = (pitch, pitch)
+                # Set universes and reverse the y direction
+                lattice.universes = universes[::-1]
+            elif lattice_type in (2, 3):
+                openmc_lattices[universe_name] = lattice = openmc.HexLattice()
+                lattice.orientation = 'x' if lattice_type == 2 else 'y'
+                lattice.center = (x0, y0)
+                lattice.pitch = [pitch]
+                if lattice_type == 2:
+                    raise ValueError('Lattice geometry: x-type hexagonal lattice not yet supported.')
+                else:
+                    raise ValueError('Lattice geometry: y-type hexagonal lattice not yet supported.')
+            elif lattice_type == 14:
+                raise ValueError('Lattice geometry: x-type triangular lattice not yet supported.')
+
+        elif lattice_type in (6, 7, 8):
+            # Case II
+            x0 = float(words[3])
+            y0 = float(words[4])
+            pitch = float(words[5])
+            universe = get_universe(words[6])
+
+            if lattice_type == 6:
+                openmc_lattices[universe_name] = lattice = openmc.RectLattice()
+                lattice.lower_left = (-(x0 + pitch/2), -(y0 + pitch/2))
+                lattice.pitch = (pitch, pitch)
+                lattice.universes = [[universe]]
+                lattice.outer = universe
+            elif lattice_type in (7, 8):
+                openmc_lattices[universe_name] = lattice = openmc.HexLattice()
+                lattice.orientation = 'x' if lattice_type == 7 else 'y'
+                lattice.center = (x0, y0)
+                lattice.pitch = [pitch]
+                lattice.universes = [[universe]]
+                lattice.outer = universes
+
+        elif lattice_type == 4:
+            # Case III
+            raise ValueError('Lattice geometry: circular cluster array not yet supported!')
+
+        elif lattice_type == 9:
+            # Case IV
+            x0 = float(words[3])
+            y0 = float(words[4])
+            n = int(words[5])
+            z = [float(x) for x in words[6::2]]
+            uni = [get_universe(x) for x in words[7::2]]
+            openmc_lattices[universe_name] = vertical_stack(z, uni, x0, y0)
+
+        elif lattice_type in (11, 12, 13):
+            # Case V
+            if lattice_type == 11:
+                raise ValueError('Lattice geometry: 3D cuboidal lattice not yet supported!')
+            elif lattice_type == 12:
+                raise ValueError('Lattice geometry: 3D x-type hexagonal prism lattice not yet supported!')
+            elif lattice_type == 13:
+                raise ValueError('Lattice geometry: 3D y-type hexagonal prism lattice not yet supported!')
+
+        # Add lattice to dictionary
+        openmc_lattices[universe_name] = lattice
 
     return openmc_lattices
 
@@ -651,7 +593,7 @@ def main():
     # lines, join cards over multiple lines
     all_lines = expand_include_cards(all_lines)
     all_lines = remove_comments(all_lines)
-    all_lines = join_lines(all_lines, {'therm', 'mat', 'mix', 'set', 'surf', 'pin', 'cell'})
+    all_lines = join_lines(all_lines, {'therm', 'mat', 'mix', 'set', 'surf', 'pin', 'cell', 'lat'})
 
     # Read thermal scattering cards
     therm_materials = parse_therm_cards(all_lines)
