@@ -385,13 +385,13 @@ def parse_lat_cards(lines: List[str], openmc_universes: Dict[str, openmc.Univers
             universes.shape = (ny, nx)
 
             if lattice_type == 1:
-                openmc_lattices[universe_name] = lattice = openmc.RectLattice()
+                lattice = openmc.RectLattice()
                 lattice.lower_left = (-(nx/2)*pitch, -(ny/2)*pitch)
                 lattice.pitch = (pitch, pitch)
                 # Set universes and reverse the y direction
                 lattice.universes = universes[::-1]
             elif lattice_type in (2, 3):
-                openmc_lattices[universe_name] = lattice = openmc.HexLattice()
+                lattice = openmc.HexLattice()
                 lattice.orientation = 'x' if lattice_type == 2 else 'y'
                 lattice.center = (x0, y0)
                 lattice.pitch = [pitch]
@@ -410,13 +410,13 @@ def parse_lat_cards(lines: List[str], openmc_universes: Dict[str, openmc.Univers
             universe = get_universe(words[6])
 
             if lattice_type == 6:
-                openmc_lattices[universe_name] = lattice = openmc.RectLattice()
+                lattice = openmc.RectLattice()
                 lattice.lower_left = (-(x0 + pitch/2), -(y0 + pitch/2))
                 lattice.pitch = (pitch, pitch)
                 lattice.universes = [[universe]]
                 lattice.outer = universe
             elif lattice_type in (7, 8):
-                openmc_lattices[universe_name] = lattice = openmc.HexLattice()
+                lattice = openmc.HexLattice()
                 lattice.orientation = 'x' if lattice_type == 7 else 'y'
                 lattice.center = (x0, y0)
                 lattice.pitch = [pitch]
@@ -434,7 +434,7 @@ def parse_lat_cards(lines: List[str], openmc_universes: Dict[str, openmc.Univers
             n = int(words[5])
             z = [float(x) for x in words[6::2]]
             uni = [get_universe(x) for x in words[7::2]]
-            openmc_lattices[universe_name] = vertical_stack(z, uni, x0, y0)
+            lattice = vertical_stack(z, uni, x0, y0)
 
         elif lattice_type in (11, 12, 13):
             # Case V
