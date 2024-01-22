@@ -385,6 +385,82 @@ def parse_pin_cards(lines: List[str], materials: Dict[str, openmc.Material], uni
             universes[universe_name] = openmc.Universe(cells=[cell])
 
 
+def parse_cell_cards(
+        lines: List[str],
+        surfaces: Dict[str, openmc.Surface],
+        materials: Dict[str, openmc.Material],
+        universes: Dict[str, openmc.Universe],
+        lattices: Dict[str, openmc.UniverseBase]):
+    """Parse 'cell' cards and return a list of cells marked as 'outside'."""
+
+    # Determine mapping of any surface that has a non-numeric name to a unique
+    # integer. This is needed when generating a cell region for OpenMC since it
+    # can't handle non-numeric surface names in the expression
+    starting_id = openmc.Surface.next_id
+    name_to_index: Dict[str, int] = {}
+    index_to_surface: Dict[int, openmc.Surface] = {}
+    for name, surf in surfaces.items():
+        if not name.isnumeric():
+            name_to_index[name] = index = starting_id
+            starting_id += 1
+        else:
+            index = int(name)
+        index_to_surface[index] = surf
+
+    outside_cells = set()
+    for line in lines:
+        words = line.split()
+        if first_word(words) != 'cell':
+            continue
+
+        # Read ID, universe, material and coefficients
+        name = words[1]
+        cell = openmc.Cell(name=name)
+
+        # Add cell to specified universe
+        universe_name = words[2]
+        if universe_name not in universes:
+            universes[universe_name] = openmc.Universe()
+        universes[universe_name].add_cell(cell)
+
+        if words[3] == 'fill':
+            # Assign universe/lattice fill to cell
+            univ_name = words[4]
+            if univ_name in universes:
+                cell.fill = universes[univ_name]
+            elif words[4] in lattices:
+                cell.fill = lattices[univ_name]
+            else:
+                raise ValueError(f"Cell '{name}' is filled with non-existent universe '{univ_name}'")
+
+            coefficients = words[5:]
+        elif words[3] == 'void':
+            coefficients = words[4:]
+        elif words[3] == 'outside':
+            coefficients = words[4:]
+            outside_cells.add(cell)
+        else:
+            cell.fill = materials[words[3]]
+            coefficients = words[4:]
+
+        # TODO: Should we keep this fixup?
+        for x in range(len(coefficients)-1, 0, -1):
+            if coefficients[x] == '-':
+                coefficients[x+1] = f'-{coefficients[x+1]}'
+                del coefficients[x]
+
+        # Creating regions
+        coefficient = ' '.join(coefficients)
+        for name, index in sorted(name_to_index.items(), key=lambda x: len(x[0]), reverse=True):
+            coefficient = coefficient.replace(name, str(index))
+        try:
+            cell.region = openmc.Region.from_expression(expression=coefficient, surfaces=index_to_surface)
+        except Exception:
+            raise ValueError(f'Failed to convert cell definition: {line}\n{coefficient}')
+
+    return outside_cells
+
+
 def determine_boundary_surfaces(geometry: openmc.Geometry, outside_cells: Set[openmc.Cell]) -> List[openmc.Surface]:
     """Determine which surfaces can be used as boundaries based on a set of 'outside' cells."""
 
@@ -407,7 +483,6 @@ def determine_boundary_surfaces(geometry: openmc.Geometry, outside_cells: Set[op
 
 
 def main():
-    openmc_cells     = {}
     openmc_universes = {}
     openmc_lattices  = {}
 
@@ -590,66 +665,9 @@ def main():
     # Read pin geometry definitions
     parse_pin_cards(all_lines, openmc_materials, openmc_universes)
 
-    #--------------------------------------------------------------------------------
-    #Conversion of a SERPENT cell and universe to a OpenMC cell and universe
-    starting_id = openmc.Surface.next_id
-    name_to_index = {}
-    index_to_surface = {}
-    for name, surf in openmc_surfaces.items():
-        if not name.isnumeric():
-            name_to_index[name] = index = starting_id
-            starting_id += 1
-        else:
-            index = int(name)
-        index_to_surface[index] = surf
-
-    outside_cells = set()
-    for line in all_lines:
-        words = line.split()
-        if first_word(words) != 'cell':
-            continue
-
-        # Read ID, universe, material and coefficients
-        name = words[1]
-        openmc_cells[name] = cell = openmc.Cell(name=name)
-
-        universe_name = words[2]
-        get_universe(universe_name).add_cell(cell)
-
-        if words[3] == 'fill':
-            # Assign universe/lattice fill to cell
-            univ_name = words[4]
-            if univ_name in openmc_universes:
-                cell.fill = openmc_universes[univ_name]
-            elif words[4] in openmc_lattices:
-                cell.fill = openmc_lattices[univ_name]
-            else:
-                raise ValueError(f"Cell '{name}' is filled with non-existent universe '{univ_name}'")
-
-            coefficients = words[5:]
-        elif words[3] == 'void':
-            coefficients = words[4:]
-        elif words[3] == 'outside':
-            coefficients = words[4:]
-            outside_cells.add(cell)
-        else:
-            cell.fill = openmc_materials[words[3]]
-            coefficients = words[4:]
-
-        # TODO: Should we keep this fixup?
-        for x in range(len(coefficients)-1, 0, -1):
-            if coefficients[x] == '-':
-                coefficients[x+1] = f'-{coefficients[x+1]}'
-                del coefficients[x]
-
-        # Creating regions
-        coefficient = ' '.join(coefficients)
-        for name, index in sorted(name_to_index.items(), key=lambda x: len(x[0]), reverse=True):
-            coefficient = coefficient.replace(name, str(index))
-        try:
-            cell.region = openmc.Region.from_expression(expression=coefficient, surfaces=index_to_surface)
-        except Exception:
-            raise ValueError(f'Failed to convert cell definition: {line}\n{coefficient}')
+    # Read cells on 'cell' cards
+    outside_cells = parse_cell_cards(all_lines, openmc_surfaces, openmc_materials,
+                                     openmc_universes, openmc_lattices)
 
     # TODO: Check for 'set root'
     geometry = openmc.Geometry(openmc_universes['0'])
