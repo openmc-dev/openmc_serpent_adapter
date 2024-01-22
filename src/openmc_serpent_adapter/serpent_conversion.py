@@ -617,8 +617,9 @@ def main():
     outside_cells = parse_cell_cards(all_lines, openmc_surfaces, openmc_materials,
                                      openmc_universes)
 
-    # TODO: Check for 'set root'
-    geometry = openmc.Geometry(openmc_universes['0'])
+    # Create geometry with specified root universe
+    root = options['root'][0] if 'root' in options else '0'
+    geometry = openmc.Geometry(openmc_universes[root])
 
     # Determine what boundary condition to apply based on the 'set bc' card
     boundary = options['bc'][0] if 'bc' in options else None
