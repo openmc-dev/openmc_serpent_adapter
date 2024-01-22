@@ -120,7 +120,7 @@ def first_word(input: Union[str, List[str]]) -> str:
     return words[0].lower()
 
 
-def join_lines(lines: List[str], cards: Set[str]) -> List[str]:
+def join_lines(lines: List[str]) -> List[str]:
     """Join input for a single card over multiple lines into a single line"""
     index = 0
     while True:
@@ -128,7 +128,7 @@ def join_lines(lines: List[str], cards: Set[str]) -> List[str]:
         if index >= len(lines):
             return lines
 
-        if first_word(lines[index]) in cards:
+        if first_word(lines[index]) in INPUT_KEYWORDS:
             while index + 1 < len(lines):
                 if first_word(lines[index + 1]) in INPUT_KEYWORDS:
                     break
@@ -593,7 +593,7 @@ def main():
     # lines, join cards over multiple lines
     all_lines = expand_include_cards(all_lines)
     all_lines = remove_comments(all_lines)
-    all_lines = join_lines(all_lines, {'therm', 'mat', 'mix', 'set', 'surf', 'pin', 'cell', 'lat'})
+    all_lines = join_lines(all_lines)
 
     # Read thermal scattering cards
     therm_materials = parse_therm_cards(all_lines)
