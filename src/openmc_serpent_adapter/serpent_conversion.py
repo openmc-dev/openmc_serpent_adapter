@@ -76,28 +76,6 @@ MATERIAL_KEYWORD_PARAMS = {
 }
 
 
-#---------------------------------------------------------------------
-# Definig a new surface ID with all integers
-def update_openmc_surfaces(openmc_surfaces):
-    # Determine maximum integer ID
-    max_id = 0
-    for name in openmc_surfaces.keys():
-        if name.isnumeric():
-            max_id = max(max_id, int(name))
-
-    # Change non-numeric keys to numeric
-    strid_to_intid = {}
-    for name in openmc_surfaces.keys():
-        if not name.isnumeric():
-            max_id += 1
-            strid_to_intid[name] = max_id
-
-    for str_id, int_id in strid_to_intid.items():
-        openmc_surfaces[str(int_id)] = openmc_surfaces.pop(str_id)
-
-    return strid_to_intid
-
-
 def expand_include_cards(lines: List[str]) -> List[str]:
     """Replace all 'include' cards"""
     index = 0
@@ -370,13 +348,7 @@ def parse_surf_cards(lines: List[str]) -> Dict[str, openmc.Surface]:
             else:
                 raise ValueError(f"Surface type '{surface_type}' not yet supported.")
 
-    # Conversion of string surface ids to integers ids
-    name_to_id = update_openmc_surfaces(openmc_surfaces)
-    keys = list(openmc_surfaces.keys())
-    for key in keys:
-        openmc_surfaces[int(key)] = openmc_surfaces.pop(key)
-
-    return openmc_surfaces, name_to_id
+    return openmc_surfaces
 
 
 def parse_pin_cards(lines: List[str], materials: Dict[str, openmc.Material], universes: Dict[str, openmc.Universe]):
@@ -413,6 +385,27 @@ def parse_pin_cards(lines: List[str], materials: Dict[str, openmc.Material], uni
             universes[universe_name] = openmc.Universe(cells=[cell])
 
 
+def determine_boundary_surfaces(geometry: openmc.Geometry, outside_cells: Set[openmc.Cell]) -> List[openmc.Surface]:
+    """Determine which surfaces can be used as boundaries based on a set of 'outside' cells."""
+
+    # Determine which halfspaces are associate with outer and inner cells
+    outer_halfspaces = set()
+    inner_halfspaces = set()
+    for cell in geometry.root_universe._cells.values():
+        halfspace_ids = {int(s) for s in re.findall(r'-?\d+', str(cell.region))}
+        if cell in outside_cells:
+            outer_halfspaces |= halfspace_ids
+        else:
+            inner_halfspaces |= halfspace_ids
+
+    # Eliminate any halfspaces that are used to define inner cells
+    outer_halfspaces -= inner_halfspaces
+
+    # The halfspaces that remain involve surfaces that can used as boundaries
+    surfaces = geometry.get_all_surfaces()
+    return [surfaces[abs(uid)] for uid in outer_halfspaces]
+
+
 def main():
     openmc_cells     = {}
     openmc_universes = {}
@@ -442,7 +435,7 @@ def main():
     options = parse_set_cards(all_lines)
 
     # Read surfaces on 'surf' cards
-    openmc_surfaces, name_to_id = parse_surf_cards(all_lines)
+    openmc_surfaces = parse_surf_cards(all_lines)
 
     def get_universe(name):
         if name not in openmc_universes:
@@ -599,8 +592,18 @@ def main():
 
     #--------------------------------------------------------------------------------
     #Conversion of a SERPENT cell and universe to a OpenMC cell and universe
-    outer_surfaces = []
-    inner_surfaces = []
+    starting_id = openmc.Surface.next_id
+    name_to_index = {}
+    index_to_surface = {}
+    for name, surf in openmc_surfaces.items():
+        if not name.isnumeric():
+            name_to_index[name] = index = starting_id
+            starting_id += 1
+        else:
+            index = int(name)
+        index_to_surface[index] = surf
+
+    outside_cells = set()
     for line in all_lines:
         words = line.split()
         if first_word(words) != 'cell':
@@ -624,8 +627,11 @@ def main():
                 raise ValueError(f"Cell '{name}' is filled with non-existent universe '{univ_name}'")
 
             coefficients = words[5:]
-        elif words[3] in ('void', 'outside'):
+        elif words[3] == 'void':
             coefficients = words[4:]
+        elif words[3] == 'outside':
+            coefficients = words[4:]
+            outside_cells.add(cell)
         else:
             cell.fill = openmc_materials[words[3]]
             coefficients = words[4:]
@@ -638,46 +644,34 @@ def main():
 
         # Creating regions
         coefficient = ' '.join(coefficients)
-        for name, surface_id in sorted(name_to_id.items(), key=lambda x: len(x[0]), reverse=True):
-            coefficient = coefficient.replace(name, str(surface_id))
+        for name, index in sorted(name_to_index.items(), key=lambda x: len(x[0]), reverse=True):
+            coefficient = coefficient.replace(name, str(index))
         try:
-            cell.region = openmc.Region.from_expression(expression=coefficient, surfaces=openmc_surfaces)
+            cell.region = openmc.Region.from_expression(expression=coefficient, surfaces=index_to_surface)
         except Exception:
-            raise ValueError(f'Failed to convert cell definition: {line}')
+            raise ValueError(f'Failed to convert cell definition: {line}\n{coefficient}')
 
-        # Outer boundary conditions
-        coefficients = coefficient.split()
-        if words[3] != 'outside':
-            for coefficient in coefficients:
-                if coefficient not in inner_surfaces:
-                    inner_surfaces.append(coefficient)
-        if words[3] == 'outside':
-            for coefficient in coefficients:
-                if coefficient not in outer_surfaces:
-                    outer_surfaces.append(coefficient)
-            for surface in outer_surfaces:
-                for name in inner_surfaces:
-                    if surface == name:
-                        outer_surfaces.remove(surface)
+    # TODO: Check for 'set root'
+    geometry = openmc.Geometry(openmc_universes['0'])
 
+    # Determine what boundary condition to apply based on the 'set bc' card
     boundary = options['bc'][0] if 'bc' in options else None
-    for surface in outer_surfaces:
-        if '-' in surface:
-            surface = surface[1:]
-        # TODO: Handle all variations of 'set bc'
-        if boundary == '1':
-            boundary = 'vacuum'
-        elif boundary == '2':
-            boundary = 'reflective'
-        elif boundary == '3':
-            boundary = 'periodic'
-        openmc_surfaces[int(surface)].boundary_type = boundary
+    # TODO: Handle all variations of 'set bc'
+    if boundary == '1':
+        boundary = 'vacuum'
+    elif boundary == '2':
+        boundary = 'reflective'
+    elif boundary == '3':
+        boundary = 'periodic'
+
+    # Try to infer boundary conditions on surfaces based on which cells were
+    # marked as 'outside' cells
+    for surf in determine_boundary_surfaces(geometry, outside_cells):
+        surf.boundary_type = boundary
 
     #------------------------------------Settings-----------------------------------------------
 
-    model = openmc.Model()
-    # TODO: Check for 'set root'
-    model.geometry = openmc.Geometry(openmc_universes['0'])
+    model = openmc.Model(geometry=geometry)
     model.materials = openmc.Materials(openmc_materials.values())
 
     model.settings.source = openmc.IndependentSource(space=openmc.stats.Point((0, 0, 0)))
