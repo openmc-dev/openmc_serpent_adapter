@@ -76,6 +76,9 @@ MATERIAL_KEYWORD_PARAMS = {
 }
 
 
+universe_fill = Union[openmc.UniverseBase, openmc.Lattice]
+
+
 def expand_include_cards(lines: List[str]) -> List[str]:
     """Replace all 'include' cards"""
     index = 0
@@ -353,7 +356,7 @@ def parse_surf_cards(lines: List[str]) -> Dict[str, openmc.Surface]:
     return openmc_surfaces
 
 
-def parse_lat_cards(lines: List[str], openmc_universes: Dict[str, openmc.UniverseBase]) -> Dict[str, openmc.Lattice]:
+def parse_lat_cards(lines: List[str], openmc_universes: Dict[str, universe_fill]):
     """Parse 'lat' cards."""
 
     def get_universe(name):
@@ -362,7 +365,6 @@ def parse_lat_cards(lines: List[str], openmc_universes: Dict[str, openmc.Univers
         return openmc_universes[name]
 
     # NOTE: If there is only one material and no surface, this code does not work. Needs to be fixed
-    openmc_lattices = {}
     for line in lines:
         words = line.split()
 
@@ -446,9 +448,7 @@ def parse_lat_cards(lines: List[str], openmc_universes: Dict[str, openmc.Univers
                 raise ValueError('Lattice geometry: 3D y-type hexagonal prism lattice not yet supported!')
 
         # Add lattice to dictionary
-        openmc_lattices[universe_name] = lattice
-
-    return openmc_lattices
+        openmc_universes[universe_name] = lattice
 
 
 def parse_pin_cards(lines: List[str], materials: Dict[str, openmc.Material], universes: Dict[str, openmc.Universe]):
@@ -489,8 +489,7 @@ def parse_cell_cards(
         lines: List[str],
         surfaces: Dict[str, openmc.Surface],
         materials: Dict[str, openmc.Material],
-        universes: Dict[str, openmc.Universe],
-        lattices: Dict[str, openmc.UniverseBase]):
+        universes: Dict[str, openmc.Universe]):
     """Parse 'cell' cards and return a list of cells marked as 'outside'."""
 
     # Determine mapping of any surface that has a non-numeric name to a unique
@@ -528,10 +527,8 @@ def parse_cell_cards(
             univ_name = words[4]
             if univ_name in universes:
                 cell.fill = universes[univ_name]
-            elif words[4] in lattices:
-                cell.fill = lattices[univ_name]
             else:
-                raise ValueError(f"Cell '{name}' is filled with non-existent universe '{univ_name}'")
+                raise ValueError(f"Cell '{name}' is filled with non-existent universe/lattice '{univ_name}'")
 
             coefficients = words[5:]
         elif words[3] == 'void':
@@ -611,14 +608,14 @@ def main():
 
     # Read lattices on 'lat' cards
     openmc_universes = {}
-    openmc_lattices = parse_lat_cards(all_lines, openmc_universes)
+    parse_lat_cards(all_lines, openmc_universes)
 
     # Read pin geometry definitions
     parse_pin_cards(all_lines, openmc_materials, openmc_universes)
 
     # Read cells on 'cell' cards
     outside_cells = parse_cell_cards(all_lines, openmc_surfaces, openmc_materials,
-                                     openmc_universes, openmc_lattices)
+                                     openmc_universes)
 
     # TODO: Check for 'set root'
     geometry = openmc.Geometry(openmc_universes['0'])
