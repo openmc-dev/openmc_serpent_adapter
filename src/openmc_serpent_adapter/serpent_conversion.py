@@ -175,7 +175,7 @@ def parse_therm_cards(lines: List[str]) -> Dict[str, str]:
 def parse_mat_mix_cards(lines: List[str], therm_materials: Dict[str, str]) -> Dict[str, openmc.Material]:
     """Parse 'mat' and 'mix' cards"""
 
-    # Avoid clasing with numeric IDs from Serpent
+    # Avoid clashing with numeric IDs from Serpent
     openmc.Material.next_id = _get_max_numeric_id(lines, {'mat', 'mix'}) + 1
 
     openmc_materials = {}
@@ -268,7 +268,7 @@ def parse_set_cards(lines: List[str]) -> Dict[str, List[str]]:
 def parse_surf_cards(lines: List[str]) -> Dict[str, openmc.Surface]:
     """Parse 'surf' cards"""
 
-    # Avoid clasing with numeric IDs from Serpent
+    # Avoid clashing with numeric IDs from Serpent
     openmc.Surface.next_id = _get_max_numeric_id(lines, {'surf'}) + 1
 
     openmc_surfaces = {}
@@ -514,7 +514,8 @@ def parse_cell_cards(
 
         # Read ID, universe, material and coefficients
         name = words[1]
-        cell = openmc.Cell(name=name)
+        cell_id = int(name) if name.isnumeric() else None
+        cell = openmc.Cell(name=name, cell_id=cell_id)
 
         # Add cell to specified universe
         universe_name = words[2]
@@ -605,6 +606,9 @@ def main():
 
     # Read surfaces on 'surf' cards
     openmc_surfaces = parse_surf_cards(all_lines)
+
+    # Avoid clashing with numeric IDs from Serpent
+    openmc.Cell.next_id = _get_max_numeric_id(all_lines, {'cell'}) + 1
 
     # Read lattices on 'lat' cards
     openmc_universes = {}
