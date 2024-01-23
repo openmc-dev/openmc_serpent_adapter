@@ -140,6 +140,14 @@ def join_lines(lines: List[str]) -> List[str]:
         index += 1
 
 
+def check_unsupported_cards(lines: List[str], keywords: Set[str]):
+    """Check for geometry features that are not yet supported."""
+    for line in lines:
+        keyword = first_word(line)
+        if keyword in keywords:
+            raise ValueError(f"'{keyword}' card not yet supported.")
+
+
 def _get_max_numeric_id(lines: List[str], keywords: Set[str], position: int = 1) -> int:
     max_id = -1
     for line in lines:
@@ -588,6 +596,10 @@ def main():
     all_lines = expand_include_cards(all_lines)
     all_lines = remove_comments(all_lines)
     all_lines = join_lines(all_lines)
+    check_unsupported_cards(all_lines, {
+        'ftrans', 'particle', 'pbed', 'solid', 'strans', 'trans', 'transa',
+        'transv', 'umsh', 'utrans', 'voro'
+    })
 
     # Avoid clashing with numeric IDs from Serpent
     openmc.Material.next_id = _get_max_numeric_id(all_lines, {'mat', 'mix'}) + 1
