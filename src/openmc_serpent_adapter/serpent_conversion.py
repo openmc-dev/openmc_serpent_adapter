@@ -361,9 +361,10 @@ def parse_surf_cards(lines: List[str]) -> Dict[str, openmc.Surface]:
 def parse_lat_cards(lines: List[str], openmc_universes: Dict[str, universe_fill]):
     """Parse 'lat' cards."""
 
-    def get_universe(name):
+    def get_universe(name: str):
         if name not in openmc_universes:
-            openmc_universes[name] = openmc.Universe()
+            uid = int(name) if name.isnumeric() else None
+            openmc_universes[name] = openmc.Universe(universe_id=uid)
         return openmc_universes[name]
 
     # NOTE: If there is only one material and no surface, this code does not work. Needs to be fixed
@@ -374,6 +375,7 @@ def parse_lat_cards(lines: List[str], openmc_universes: Dict[str, universe_fill]
             continue
 
         universe_name = words[1]
+        lattice_id = int(universe_name) if universe_name.isnumeric() else None
         lattice_type = int(words[2])
         if lattice_type in (1, 2, 3, 14):
             # Case I
@@ -389,13 +391,13 @@ def parse_lat_cards(lines: List[str], openmc_universes: Dict[str, universe_fill]
             universes.shape = (ny, nx)
 
             if lattice_type == 1:
-                lattice = openmc.RectLattice(name=universe_name)
+                lattice = openmc.RectLattice(lattice_id=lattice_id, name=universe_name)
                 lattice.lower_left = (-(nx/2)*pitch, -(ny/2)*pitch)
                 lattice.pitch = (pitch, pitch)
                 # Set universes and reverse the y direction
                 lattice.universes = universes[::-1]
             elif lattice_type in (2, 3):
-                lattice = openmc.HexLattice(name=universe_name)
+                lattice = openmc.HexLattice(lattice_id=lattice_id, name=universe_name)
                 lattice.orientation = 'x' if lattice_type == 2 else 'y'
                 lattice.center = (x0, y0)
                 lattice.pitch = [pitch]
@@ -414,13 +416,13 @@ def parse_lat_cards(lines: List[str], openmc_universes: Dict[str, universe_fill]
             universe = get_universe(words[6])
 
             if lattice_type == 6:
-                lattice = openmc.RectLattice(name=universe_name)
+                lattice = openmc.RectLattice(lattice_id=lattice_id, name=universe_name)
                 lattice.lower_left = (-(x0 + pitch/2), -(y0 + pitch/2))
                 lattice.pitch = (pitch, pitch)
                 lattice.universes = [[universe]]
                 lattice.outer = universe
             elif lattice_type in (7, 8):
-                lattice = openmc.HexLattice(name=universe_name)
+                lattice = openmc.HexLattice(lattice_id=lattice_id, name=universe_name)
                 lattice.orientation = 'x' if lattice_type == 7 else 'y'
                 lattice.center = (x0, y0)
                 lattice.pitch = [pitch]
@@ -522,7 +524,8 @@ def parse_cell_cards(
         # Add cell to specified universe
         universe_name = words[2]
         if universe_name not in universes:
-            universes[universe_name] = openmc.Universe()
+            uid = int(universe_name) if universe_name.isnumeric() else None
+            universes[universe_name] = openmc.Universe(universe_id=uid)
         universes[universe_name].add_cell(cell)
 
         if words[3] == 'fill':
@@ -597,15 +600,19 @@ def main():
     all_lines = remove_comments(all_lines)
     all_lines = join_lines(all_lines)
     check_unsupported_cards(all_lines, {
-        'ftrans', 'particle', 'pbed', 'solid', 'strans', 'trans', 'transa',
-        'transv', 'umsh', 'utrans', 'voro'
+        'ftrans', 'nest', 'particle', 'pbed', 'solid', 'strans', 'trans',
+        'transa', 'transv', 'umsh', 'utrans', 'voro'
     })
 
-    # Avoid clashing with numeric IDs from Serpent
+    # Avoid clashing with numeric IDs from Serpent. For universes, we need to
+    # account for all cards where universe names appear.
     openmc.Material.next_id = _get_max_numeric_id(all_lines, {'mat', 'mix'}) + 1
     openmc.Surface.next_id = _get_max_numeric_id(all_lines, {'surf'}) + 1
     openmc.Cell.next_id = _get_max_numeric_id(all_lines, {'cell'}) + 1
-    # TODO: Set next_id for universes/lattices
+    max_univ1 = _get_max_numeric_id(all_lines, {'lat', 'pin', 'nest', 'particle', 'pbed', 'umsh'})
+    max_univ2 = _get_max_numeric_id(all_lines, {'cell', 'solid'}, 2)
+    openmc.Universe.next_id = max(max_univ1, max_univ2) + 1
+    openmc.Lattice.next_id = max(max_univ1, max_univ2) + 1
 
     # Read thermal scattering cards
     therm_materials = parse_therm_cards(all_lines)
