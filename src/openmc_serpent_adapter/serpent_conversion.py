@@ -367,7 +367,6 @@ def parse_lat_cards(lines: List[str], openmc_universes: Dict[str, universe_fill]
             openmc_universes[name] = openmc.Universe(universe_id=uid)
         return openmc_universes[name]
 
-    # NOTE: If there is only one material and no surface, this code does not work. Needs to be fixed
     for line in lines:
         words = line.split()
 
@@ -457,6 +456,9 @@ def parse_lat_cards(lines: List[str], openmc_universes: Dict[str, universe_fill]
 
 def parse_pin_cards(lines: List[str], materials: Dict[str, openmc.Material], universes: Dict[str, openmc.Universe]):
     """Parse 'pin' cards"""
+
+    # NOTE: If there is only one material and no surface, this code does not work. Needs to be fixed
+    
     for line in lines:
         words = line.split()
         if first_word(words) != 'pin':
