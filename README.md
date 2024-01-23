@@ -18,4 +18,16 @@ There has been no methodical V&V on this converter; use at your own risk!
 
 ## Known Limitations
 
-TODO
+The converter currently only handles geometry and material information; source
+definition (`src`) and detectors (`det`) are ignored.
+
+Many geometry features are not currrently supported:
+
+- Many lattice types
+- Transformations (`trans`, `ftrans`, `strans`, `transa`, `transv`)
+- Nested universe definitions (`nest`)
+- Particle geometry (`particle`)
+- Explicit stochastic geometry (`pbed`)
+- Irregular 3D geometry (`solid`)
+- Unstructured mesh-based geometry (`umsh`)
+- Stochastic Voronoi tessellation geomery (`voro`)
