@@ -79,7 +79,7 @@ MATERIAL_KEYWORD_PARAMS = {
 universe_fill = Union[openmc.UniverseBase, openmc.Lattice]
 
 
-def expand_include_cards(lines: List[str]) -> List[str]:
+def expand_include_cards(lines: List[str], basedir: Path) -> List[str]:
     """Replace all 'include' cards"""
     index = 0
     while True:
@@ -94,6 +94,8 @@ def expand_include_cards(lines: List[str]) -> List[str]:
             # Read lines from included file. Need to use shlex splitting to
             # handle paths with spaces embedded
             include_path = Path(shlex.split(lines[index])[1])
+            if not include_path.is_absolute():
+                include_path = basedir / include_path
             with include_path.open('r') as fh:
                 insert_lines = fh.readlines()
 
@@ -587,14 +589,15 @@ def determine_boundary_surfaces(geometry: openmc.Geometry, outside_cells: Set[op
     return [surfaces[abs(uid)] for uid in outer_halfspaces]
 
 
-def serpent_to_model(path) -> openmc.Model:
+def serpent_to_model(input_file) -> openmc.Model:
     # Read lines from input file
-    with Path(path).open('r') as fh:
+    input_file = Path(input_file)
+    with input_file.open('r') as fh:
         all_lines = fh.readlines()
 
     # Preprocessing steps: replace 'include' cards, remove comments and empty
     # lines, join cards over multiple lines
-    all_lines = expand_include_cards(all_lines)
+    all_lines = expand_include_cards(all_lines, input_file.parent)
     all_lines = remove_comments(all_lines)
     all_lines = join_lines(all_lines)
     check_unsupported_cards(all_lines, {
@@ -659,7 +662,7 @@ def serpent_to_model(path) -> openmc.Model:
     model = openmc.Model(geometry=geometry)
     model.materials = openmc.Materials(openmc_materials.values())
 
-    model.settings.source = openmc.IndependentSource(space=openmc.stats.Point((0, 0, 0)))
+    model.settings.source = openmc.IndependentSource(space=openmc.stats.Point((0., 0., 0.)))
     model.settings.batches = 130
     model.settings.inactive = 30
     model.settings.particles = 10000
