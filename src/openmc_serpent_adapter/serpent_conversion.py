@@ -458,7 +458,7 @@ def parse_pin_cards(lines: List[str], materials: Dict[str, openmc.Material], uni
     """Parse 'pin' cards"""
 
     # NOTE: If there is only one material and no surface, this code does not work. Needs to be fixed
-    
+
     for line in lines:
         words = line.split()
         if first_word(words) != 'pin':
@@ -587,13 +587,9 @@ def determine_boundary_surfaces(geometry: openmc.Geometry, outside_cells: Set[op
     return [surfaces[abs(uid)] for uid in outer_halfspaces]
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('input_file', type=Path)
-    args = parser.parse_args()
-
+def serpent_to_model(path) -> openmc.Model:
     # Read lines from input file
-    with args.input_file.open('r') as fh:
+    with Path(path).open('r') as fh:
         all_lines = fh.readlines()
 
     # Preprocessing steps: replace 'include' cards, remove comments and empty
@@ -669,4 +665,13 @@ def main():
     model.settings.particles = 10000
     model.settings.temperature = {'method': 'interpolation'}
 
+    return model
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('input_file', type=Path)
+    args = parser.parse_args()
+
+    model = serpent_to_model(args.input_file)
     model.export_to_model_xml('model.xml')
