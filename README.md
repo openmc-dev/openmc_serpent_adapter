@@ -24,7 +24,8 @@ definition (`src`) and detectors (`det`) are ignored.
 Many geometry features are not currrently supported:
 
 - Many lattice types
-- Transformations (`trans`, `ftrans`, `strans`, `transa`, `transv`)
+- Limited support for transformations (`trans`)
+- Velocity and acceleration transformations (`transa`, `transv`)
 - Nested universe definitions (`nest`)
 - Particle geometry (`particle`)
 - Explicit stochastic geometry (`pbed`)

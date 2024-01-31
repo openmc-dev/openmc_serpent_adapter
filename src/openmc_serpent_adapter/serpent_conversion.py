@@ -5,7 +5,7 @@ import argparse
 from pathlib import Path
 import re
 import shlex
-from typing import List, Set, Union, Dict
+from typing import List, Tuple, Set, Union, Dict, Any
 
 import numpy as np
 import openmc
@@ -272,7 +272,44 @@ def parse_set_cards(lines: List[str]) -> Dict[str, List[str]]:
     return options
 
 
-def parse_surf_cards(lines: List[str]) -> Dict[str, openmc.Surface]:
+def parse_trans_cards(lines: List[str]) -> Dict[Tuple[str, str], Dict[str, Any]]:
+    """Parse transformations on 'trans' cards."""
+    transformations = {}
+    for line in lines:
+        words = line.split()
+        keyword = first_word(words)
+        if keyword not in ('trans', 'ftrans', 'strans', 'utrans', 'dtrans'):
+            continue
+
+        # Read type, unit, and values
+        if keyword == 'trans':
+            trans_type = words[1].lower()
+            unit = words[2]
+            parameters = words[3:]
+        elif keyword in ('ftrans', 'strans', 'utrans', 'dtrans'):
+            trans_type = keyword[0]
+            unit = words[1]
+            parameters = words[2:]
+
+        # Check for unsupported transformation type
+        if trans_type in ('u', 'l', 'd', 'sr'):
+            raise ValueError(f"'trans {trans_type} not yet supported.")
+
+        # Turn values into a dictionary of data that can be more easily used
+        if len(parameters) == 1:
+            data = {'lvl': parameters[0]}
+        elif parameters[0].lower() == 'rot':
+            raise ValueError("Transformation with rotation not yet supported.")
+        elif len(parameters) == 3:
+            data = {'xyz': np.array([float(x) for x in parameters[:3]])}
+        else:
+            raise ValueError("Transformation with rotation not yet supported.")
+        transformations[trans_type, unit] = data
+
+    return transformations
+
+
+def parse_surf_cards(lines: List[str], transformations: Dict[Tuple[str, str], Dict[str, Any]]) -> Dict[str, openmc.Surface]:
     """Parse 'surf' cards"""
 
     openmc_surfaces = {}
@@ -356,6 +393,11 @@ def parse_surf_cards(lines: List[str]) -> Dict[str, openmc.Surface]:
             openmc_surfaces[name] = hexyc(x0, y0, d)
         else:
             raise ValueError(f"Surface type '{surface_type}' not yet supported.")
+
+        # Check for surface transformation
+        trans = transformations.get(('s', name))
+        if trans is not None and 'xyz' in trans:
+            openmc_surfaces[name].translate(trans['xyz'], inplace=True)
 
     return openmc_surfaces
 
@@ -497,7 +539,8 @@ def parse_cell_cards(
         lines: List[str],
         surfaces: Dict[str, openmc.Surface],
         materials: Dict[str, openmc.Material],
-        universes: Dict[str, openmc.Universe]):
+        universes: Dict[str, openmc.Universe],
+        transformations: Dict[Tuple[str, str], Dict[str, Any]]):
     """Parse 'cell' cards and return a list of cells marked as 'outside'."""
 
     # Determine mapping of any surface that has a non-numeric name to a unique
@@ -537,6 +580,9 @@ def parse_cell_cards(
             univ_name = words[4]
             if univ_name in universes:
                 cell.fill = universes[univ_name]
+                trans = transformations.get(('f', name))
+                if trans is not None and 'xyz' in trans:
+                    cell.translation = trans['xyz']
             else:
                 raise ValueError(f"Cell '{name}' is filled with non-existent universe/lattice '{univ_name}'")
 
@@ -601,8 +647,7 @@ def serpent_to_model(input_file) -> openmc.Model:
     all_lines = remove_comments(all_lines)
     all_lines = join_lines(all_lines)
     check_unsupported_cards(all_lines, {
-        'ftrans', 'nest', 'particle', 'pbed', 'solid', 'strans', 'trans',
-        'transa', 'transv', 'umsh', 'utrans', 'voro'
+        'nest', 'particle', 'pbed', 'solid', 'transa', 'transv', 'umsh', 'voro'
     })
 
     # Avoid clashing with numeric IDs from Serpent. For universes, we need to
@@ -624,8 +669,11 @@ def serpent_to_model(input_file) -> openmc.Model:
     # Read input options on 'set' cards
     options = parse_set_cards(all_lines)
 
+    # Read transformations
+    transformations = parse_trans_cards(all_lines)
+
     # Read surfaces on 'surf' cards
-    openmc_surfaces = parse_surf_cards(all_lines)
+    openmc_surfaces = parse_surf_cards(all_lines, transformations)
 
     # Read lattices on 'lat' cards
     openmc_universes = {}
@@ -636,7 +684,7 @@ def serpent_to_model(input_file) -> openmc.Model:
 
     # Read cells on 'cell' cards
     outside_cells = parse_cell_cards(all_lines, openmc_surfaces, openmc_materials,
-                                     openmc_universes)
+                                     openmc_universes, transformations)
 
     # Create geometry with specified root universe
     root = options['root'][0] if 'root' in options else '0'
