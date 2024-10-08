@@ -393,7 +393,7 @@ def parse_surf_cards(lines: List[str], transformations: Dict[Tuple[str, str], Di
             openmc_surfaces[name] = hexyc(x0, y0, d)
         elif surface_type == 'cuboid':
             xmin, xmax, ymin, ymax, zmin, zmax = coefficients
-            openmc_surface[name] = openmc.model.RectangularParallelepiped(xmin, xmax, ymin, ymax, zmin, zmax)
+            openmc_surfaces[name] = openmc.model.RectangularParallelepiped(xmin, xmax, ymin, ymax, zmin, zmax)
         else:
             raise ValueError(f"Surface type '{surface_type}' not yet supported.")
 
