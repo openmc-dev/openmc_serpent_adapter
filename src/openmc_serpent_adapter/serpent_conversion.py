@@ -12,7 +12,7 @@ import openmc
 from openmc.data import get_thermal_name
 from openmc.data.ace import get_metadata
 
-from .serpent_geometry import hexxc, hexyc, sqc, vertical_stack
+from .serpent_geometry import hexxc, hexyc, sqc, vertical_stack, zvessel
 
 
 INPUT_KEYWORDS = [
@@ -394,6 +394,13 @@ def parse_surf_cards(lines: List[str], transformations: Dict[Tuple[str, str], Di
         elif surface_type == 'cuboid':
             xmin, xmax, ymin, ymax, zmin, zmax = coefficients
             openmc_surfaces[name] = openmc.model.RectangularParallelepiped(xmin, xmax, ymin, ymax, zmin, zmax)
+        elif surface_type == "vessel":
+            if len(coefficients) == 7:
+                x0, y0, r, zmin, zmax, hbottom, htop = coefficients
+            else:
+                x0, y0, r, zmin, zmax, hbottom = coefficients
+                htop = hbottom
+            openmc_surfaces[name] = zvessel(x0, y0, r, zmin, zmax, hbottom, htop)
         else:
             raise ValueError(f"Surface type '{surface_type}' not yet supported.")
 
