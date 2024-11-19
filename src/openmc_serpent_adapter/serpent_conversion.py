@@ -381,10 +381,8 @@ def parse_surf_cards(lines: List[str], transformations: Dict[Tuple[str, str], Di
             openmc_surfaces[name] = openmc.Plane(A, B, C, D, **kwargs)
         elif surface_type == 'cone':
             x0, y0, z0, r, h = coefficients
-            R = coefficients[3]/coefficients[4]
-            Z0 = coefficients[4] + coefficients[2]
-            up = (h < 0)
-            openmc_surfaces[name] = openmc.model.ZConeOneSided(x0, y0, Z0, R, up)
+            center_base = (x0, y0, z0)
+            openmc_surfaces[name] = openmc.model.ConicalFrustum(center_base, (0., 0., h), r, 0.0)
         elif surface_type == 'hexxc':
             x0, y0, d = coefficients
             openmc_surfaces[name] = hexxc(x0, y0, d)
