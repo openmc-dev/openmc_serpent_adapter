@@ -400,7 +400,7 @@ def parse_surf_cards(lines: List[str], transformations: Dict[Tuple[str, str], Di
             else:
                 x0, y0, r, zmin, zmax, hbottom = coefficients
                 htop = hbottom
-            openmc_surfaces[name] = zvessel(x0, y0, r, zmin, zmax, hbottom, htop)
+            openmc_surfaces[name] = openmc.model.Vessel(r, zmin, zmax, hbottom, htop, (x0, y0))
         else:
             raise ValueError(f"Surface type '{surface_type}' not yet supported.")
 
