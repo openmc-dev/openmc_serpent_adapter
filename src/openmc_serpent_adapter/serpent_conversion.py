@@ -612,6 +612,7 @@ def parse_cell_cards(
 
         # Creating regions
         coefficient = ' '.join(coefficients)
+        coefficient = coefficient.replace(':', '|')
         for name, index in sorted(name_to_index.items(), key=lambda x: len(x[0]), reverse=True):
             coefficient = coefficient.replace(name, str(index))
         try:
