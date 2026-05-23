@@ -12,7 +12,7 @@ import openmc
 from openmc.data import get_thermal_name
 from openmc.data.ace import get_metadata
 
-from .serpent_geometry import hexxc, hexyc, sqc, vertical_stack, zvessel
+from .serpent_geometry import hexxc, hexyc, sqc, vertical_stack
 
 
 INPUT_KEYWORDS = [
