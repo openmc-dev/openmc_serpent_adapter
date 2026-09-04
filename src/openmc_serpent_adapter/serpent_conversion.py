@@ -439,7 +439,7 @@ def parse_lat_cards(lines: List[str], openmc_universes: Dict[str, universe_fill]
             # Put universes into an array
             uni = words[8:]
             universes = np.array([get_universe(name) for name in uni])
-            universes.shape = (ny, nx)
+            universes = universes.reshape(ny, nx)
 
             if lattice_type == 1:
                 lattice = openmc.RectLattice(lattice_id=lattice_id, name=universe_name)
